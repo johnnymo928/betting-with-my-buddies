@@ -57,6 +57,17 @@
         </section>
 
         <section class="panel">
+            <div class="panel-head"><h2><span class="tag">ODDS</span> Sportsbook Odds</h2></div>
+            <p class="hint">Odds are pulled automatically once on each game day, 3 hours before the first kickoff. Credits are limited, so only pull by hand if that missed.</p>
+            <div class="odds-status" id="odds-status">Checking&hellip;</div>
+            <div class="row-btns">
+                <button class="btn ghost" id="odds-check" type="button">Check status (free)</button>
+                <button class="btn danger" id="odds-pull" type="button">Pull odds now (about 6 credits)</button>
+            </div>
+            <p class="form-error" id="odds-msg" role="status"></p>
+        </section>
+
+        <section class="panel">
             <div class="panel-head"><h2><span class="tag tag-gold">BETS</span> Remove Bets</h2></div>
             <p class="hint">Removing a bet hides it from every page and from the stats. It stays in the sheet and can be restored.</p>
             <div id="admin-bets" class="bet-list"></div>

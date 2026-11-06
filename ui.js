@@ -10,6 +10,13 @@ const UI = (() => {
         const payout = bet.stake * multiplier(bet.odds);
 
         // live progress / auto-grade note for structured legs
+        const oddsNote = l => {
+            const k = l.pick;
+            if (!k?.book) return "";
+            const when = k.oddsAt && typeof Odds !== "undefined" ? " \u00b7 odds pulled " + Odds.pulledAt(k.oddsAt) : "";
+            const label = typeof Odds !== "undefined" ? Odds.bookLabel(k.book) : k.book;
+            return `<span class="prog muted">${esc(label)} ${k.price != null ? (k.price > 0 ? "+" : "") + k.price : ""}${esc(when)}</span>`;
+        };
         const progress = l => {
             if (!l.pick) return "";
             if (l.status !== "pending") {
@@ -30,7 +37,7 @@ const UI = (() => {
         const legs = bet.legs.map(l => `
             <li class="leg ${l.status}">
                 <span class="leg-icon">${ICON[l.status]}</span>
-                <span class="leg-text">${esc(l.text)}${progress(l)}</span>
+                <span class="leg-text">${esc(l.text)}${oddsNote(l)}${progress(l)}</span>
                 ${editable ? `
                 <span class="leg-actions" role="group" aria-label="Mark result">
                     <button data-act="leg" data-bet="${bet.id}" data-leg="${l.id}" data-status="won" class="${l.status === "won" ? "on-won" : ""}" title="Hit">✓</button>

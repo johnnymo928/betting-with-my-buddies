@@ -56,7 +56,7 @@ function legRow() {
 
     const q = s => row.querySelector(s);
     const st = { games: [], game: null, players: [], loadErr: false };
-    row._price = null; row._book = null;          // set when a sportsbook line is chosen with "Use"
+    row._price = null; row._book = null; row._oddsAt = null;   // set when a sportsbook line is chosen with "Use"
     let token = 0;                                // ignores stale odds responses
 
     /* ----- games ----- */
@@ -126,12 +126,14 @@ function legRow() {
     const panel = q(".lines");
     // editing any field by hand drops a chosen sportsbook price, since it may no longer match
     function clearUsed() {
-        row._price = null; row._book = null;
+        row._price = null; row._book = null; row._oddsAt = null;
         panel.querySelectorAll("tr.used").forEach(t => t.classList.remove("used"));
     }
     q(".kind-fields").addEventListener("input", clearUsed);
     q(".kind-fields").addEventListener("change", clearUsed);
 
+    const NO_SNAPSHOT = "No odds have been pulled yet. Lines are pulled once on game days, 3 hours before the first kickoff.";
+    let panelAsOf = null;                         // when the lines on screen were pulled
     const showMsg = t => { panel.innerHTML = `<p class="lines-msg">${esc(t)}</p>`; };
 
     async function refreshLines() {
@@ -140,15 +142,6 @@ function legRow() {
         panel.hidden = false;
         const league = q(".f-league").value;
 
-        // The odds plan is limited, so lines are only fetched in the 24 hours before kickoff.
-        const g = st.game, kickoff = g.start ? new Date(g.start).getTime() : null;
-        if (g.state !== "pre") return showMsg("This game is under way or finished. Sportsbook lines load before kickoff only.");
-        if (kickoff === null) return showMsg("Kickoff time unknown, so sportsbook lines can't be loaded.");
-        if (kickoff - Date.now() > 24 * 3600 * 1000) {
-            const opens = new Date(kickoff - 24 * 3600 * 1000)
-                .toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
-            return showMsg("Sportsbook lines load 1 day before kickoff (from " + opens + "), to save the monthly odds limit.");
-        }
         try {
             if (kind === "prop") {
                 const pid = q(".f-player")?.value;
@@ -156,9 +149,9 @@ function legRow() {
                 const p = st.players.find(x => x.id === pid);
                 if (!p) return;
                 showMsg("Loading lines…");
-                const { event } = await Odds.forGame(league, st.game);
+                const { event, none } = await Odds.forGame(league, st.game);
                 if (my !== token) return;
-                if (!event) return showMsg("No sportsbook lines for this game yet.");
+                if (!event) return showMsg(none ? NO_SNAPSHOT : "No sportsbook lines saved for this game.");
                 const r = await Odds.propLines(league, event.id, q(".f-stat").value, p.name);
                 if (my !== token) return;
                 if (r.unsupported) return showMsg("Sportsbooks don't list this stat.");
@@ -166,15 +159,15 @@ function legRow() {
                 renderLines("prop", r.books, r.fetchedAt);
             } else {
                 showMsg("Loading lines…");
-                const { event, fetchedAt } = await Odds.forGame(league, st.game);
+                const { event, fetchedAt, none } = await Odds.forGame(league, st.game);
                 if (my !== token) return;
-                if (!event || !event.books.length) return showMsg("No sportsbook lines for this game yet.");
+                if (!event || !event.books.length) return showMsg(none ? NO_SNAPSHOT : "No sportsbook lines saved for this game.");
                 renderLines(kind, event.books, fetchedAt);
             }
         } catch (e) {
             console.error("odds", e);
-            if (my === token) showMsg(e.message === "credits_low"
-                ? "Sportsbook lines are paused to protect this month's free odds credits."
+            if (my === token) showMsg(e.message === "credits_low" ? "Sportsbook lines are paused to protect this month's free odds credits."
+                : e.message === "prop_limit" ? "Today's player-prop lookups are used up. Enter the prop line by hand."
                 : "Sportsbook lines aren't available right now.");
         }
     }
@@ -213,17 +206,18 @@ function legRow() {
         const best = ["spread", "ml"].includes(kind) ? Math.max(...rows.map(r => r.score)) : null;
         const title = kind === "spread" ? `${team?.name || ""} spread` : kind === "ml" ? `${team?.name || ""} moneyline`
             : kind === "total" ? "Game total" : "Player prop";
-        const asOf = fetchedAt ? new Date(fetchedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+        const asOf = Odds.pulledAt(fetchedAt);
+        panelAsOf = fetchedAt || null;
 
         panel.innerHTML = `
-            <div class="lines-head"><b>Lines by sportsbook</b> <span class="muted">${esc(title)}${asOf ? " · as of " + esc(asOf) : ""}</span></div>
+            <div class="lines-head"><b>Lines by sportsbook</b> <span class="muted">${esc(title)}${asOf ? " \u00b7 <b>odds pulled " + esc(asOf) + "</b>" : ""}</span></div>
             <table class="lines-table"><tbody>${rows.map(r => `
                 <tr>
                     <td class="lb">${esc(r.label)}${r.score === best ? ' <span class="best">Best</span>' : ""}</td>
                     <td class="lt">${esc(r.text)}</td>
                     <td class="la">${r.uses.map(u => `<button type="button" class="btn ghost sm" data-use="${esc(JSON.stringify(u.d))}">${u.text}</button>`).join("")}</td>
                 </tr>`).join("")}</tbody></table>
-            <p class="lines-note muted">Lines can be a few hours old. Confirm in your app before betting.</p>`;
+            <p class="lines-note muted">Odds are pulled once on game days, 3 hours before the first kickoff, and can have moved since. Confirm in your app before betting.</p>`;
     }
 
     panel.addEventListener("click", e => {
@@ -233,7 +227,7 @@ function legRow() {
         const line = q(".f-line"), side = q(".f-side");
         if (d.line != null && line) { line.value = d.line; line.dataset.touched = "1"; }
         if (d.side && side) side.value = d.side;
-        row._price = d.price; row._book = d.book;
+        row._price = d.price; row._book = d.book; row._oddsAt = panelAsOf;
         panel.querySelectorAll("tr.used").forEach(t => t.classList.remove("used"));
         btn.closest("tr").classList.add("used");
         $("book").value = d.book;
@@ -292,7 +286,7 @@ function legRow() {
         if (!g) throw new Error("Pick a game for every leg.");
         const league = q(".f-league").value;
         const base = { kind, league, eventId: g.id, gameLabel: g.label,
-            ...(row._price != null ? { book: row._book, price: row._price } : {}) };
+            ...(row._price != null ? { book: row._book, price: row._price, oddsAt: row._oddsAt } : {}) };
         const line = parseFloat(q(".f-line")?.value);
         const needLine = () => { if (!Number.isFinite(line)) throw new Error("Enter a line for every leg."); };
         const team = id => g.teams.find(t => t.id === id);

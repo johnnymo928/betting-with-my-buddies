@@ -34,12 +34,15 @@ const Odds = (() => {
 
     /* Find the Odds API event that matches an ESPN game from Live.games() */
     async function forGame(league, game, force) {
-        const j = await call({ league }, 300000, force);
+        const j = await call({ league }, 300000, force);     // today's saved snapshot (the script pulls it once a day)
         const [away, home] = game.teams;
-        const event = j.events.find(e =>
+        const event = (j.events || []).find(e =>
             (same(e.away, away.full) || same(e.away, away.name)) && (same(e.home, home.full) || same(e.home, home.name))) || null;
-        return { event, fetchedAt: j.fetchedAt, remaining: j.remaining };
+        return { event, fetchedAt: j.fetchedAt, none: !!j.none, remaining: j.remaining };
     }
+
+    // "Sun 9:02 AM": when the saved odds were pulled
+    const pulledAt = ms => ms ? new Date(ms).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : "";
 
     /* Lines from every book for one player prop. Returns rows by book:
        { key, label, line, over, under } */
@@ -70,5 +73,5 @@ const Odds = (() => {
 
     async function status() { return call({ status: 1 }, 0, true); }
 
-    return { enabled, PROP_MARKET, bookLabel, bookKeys, forGame, propLines, combine, fmt, status };
+    return { enabled, PROP_MARKET, bookLabel, bookKeys, forGame, propLines, combine, fmt, status, pulledAt };
 })();

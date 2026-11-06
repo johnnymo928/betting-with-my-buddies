@@ -494,3 +494,6 @@ optgroup{color:var(--muted);font-style:normal}
 
 /* An element marked hidden must stay hidden, even where a rule sets display (the locked admin area) */
 [hidden]{display:none !important}
+
+/* ---------- Admin odds status ---------- */
+.odds-status{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.7;margin-bottom:12px}

@@ -50,29 +50,31 @@ window.renderKB = function () {
             <p class="hint">If a feed fails, the page keeps showing the last good data and retries on the next cycle.</p>`],
 
         ["Sportsbook odds (The Odds API)", `
-            <p>Lines from DraftKings, FanDuel, BetMGM, Caesars and other books come from <b>The Odds API</b> (the-odds-api.com). The site never talks to it directly. It asks the Google Apps Script, which holds the API key privately in <i>Script Properties</i> as <code>ODDS_API_KEY</code>, fetches the odds, and caches them.</p>
-            <table class="table"><thead><tr><th>Request</th><th>Credits used</th><th>Cached</th></tr></thead><tbody>
-                <tr><td>Game lines for a league (spread, moneyline, total)</td><td>3</td><td>6 hours in the script, 5 minutes in the browser</td></tr>
-                <tr><td>One player-prop market for one game</td><td>1</td><td>6 hours</td></tr>
-                <tr><td>Status check (the button above)</td><td>0</td><td>Not cached</td></tr>
-            </tbody></table>
-            <p>The free plan allows about <b>500 requests a month</b>, so lines are rationed three ways. Use the test button above to see how many credits are left.</p>
+            <p>Lines from DraftKings, FanDuel, BetMGM, Caesars and other books come from <b>The Odds API</b> (the-odds-api.com). The site never talks to it directly. The Google Apps Script holds the API key privately in <i>Script Properties</i> as <code>ODDS_API_KEY</code>, fetches the odds, and saves them.</p>
+            <p>The free plan allows about <b>500 requests a month</b>, so odds are pulled <b>once per game day</b>, not on demand:</p>
             <ol class="kb-list">
-                <li><b>One day before kickoff.</b> The Place Bet form only loads sportsbook lines for a game in the 24 hours before it starts. Earlier than that it says when lines will open. Games already under way or finished load none.</li>
-                <li><b>Only when someone builds a bet.</b> Nothing is fetched in the background.</li>
-                <li><b>Cached for 6 hours.</b> Everyone shares the same saved copy, so a lines request costs credits at most about 4 times a day per league however many people look.</li>
+                <li><b>3 hours before the first kickoff.</b> A timer in the script wakes every 15 minutes and checks ESPN's (free) schedule. On a day with games it waits until 3 hours before the <b>first</b> kickoff of that day, in the Eastern time zone, then pulls the lines for every league playing that day, once.</li>
+                <li><b>Saved with the time.</b> The pull is saved in the script with its date and time. Every device reads that saved copy, so opening pages never spends credits.</li>
+                <li><b>The time is always shown.</b> The Place Bet form says "odds pulled Sun 9:02 AM" over the lines, and each bet remembers the sportsbook, the price and when those odds were pulled (shown under the leg).</li>
             </ol>
-            <p>As a safety net, the script stops asking the odds service when fewer than 40 credits remain, and the form then says lines are paused.</p>
+            <table class="table"><thead><tr><th>Request</th><th>Credits</th><th>When</th></tr></thead><tbody>
+                <tr><td>Game lines (spreads, moneyline, totals) for one league</td><td>3</td><td>Once per game day, per league playing</td></tr>
+                <tr><td>One player-prop market for one game</td><td>1</td><td>On demand, at most 10 a day, cached 6 hours</td></tr>
+                <tr><td>Status check (Admin page)</td><td>0</td><td>Whenever you press it</td></tr>
+                <tr><td>Manual "Pull odds now" (Admin page)</td><td>about 6</td><td>Only if the automatic pull missed</td></tr>
+            </tbody></table>
+            <p>That is at most about 6 credits on a day with both leagues playing, and usually 3. The script also stops asking the odds service when fewer than 40 credits remain.</p>
             <ul class="kb-list">
                 <li><b>Where it shows:</b> a "Lines by sportsbook" panel appears inside each leg of the Place Bet form. <b>Use</b> fills in the line and the odds and sets the sportsbook. For a parlay, once every leg has a price the total odds are worked out for you.</li>
+                <li><b>Games with no lines:</b> a game that isn't on today's saved pull (a different day, or the pull hasn't run yet) shows no lines. Enter the line and odds by hand.</li>
+                <li><b>The timer:</b> it is installed once by running <code>installOddsTrigger</code> in the Apps Script editor. The Admin page shows whether it is running, the credits left, and when each league was last pulled.</li>
                 <li><b>Which books:</b> the list is <code>BOOKS</code> in <code>config.js</code> and <code>BOOK_KEYS</code> in the Apps Script. Change both together, then publish a new script version.</li>
-                <li><b>Matching games:</b> ESPN games are matched to The Odds API by team name. A game with no match shows "No sportsbook lines for this game yet".</li>
+                <li><b>Matching games:</b> ESPN games are matched to The Odds API by team name. A game with no match shows no lines.</li>
                 <li><b>Prop coverage:</b> not every stat has sportsbook lines. Pass+Rush yards, rush TDs, sacks and tackles have none, and the panel says so.</li>
                 <li><b>Changing the key:</b> Apps Script &rsaquo; Project Settings &rsaquo; Script Properties &rsaquo; <code>ODDS_API_KEY</code>. The key is never stored on the website.</li>
-                <li><b>Odds move:</b> prices can be up to 6 hours old, so confirm in the app before placing the bet.</li>
+                <li><b>Odds move:</b> prices are a snapshot from the pull time, so confirm in the app before placing the bet.</li>
             </ul>
-            <p>ESPN still provides one book's spread and total (<b>DraftKings</b>). It prefills the spread and total fields as soon as a game is picked, before the sportsbook panel loads.</p>
-            <p><b>Risk and gain</b> are calculated locally: <i>to win = stake x (odds/100)</i> for positive American odds, or <i>stake x (100/|odds|)</i> for negative odds. A parlay uses the combined odds the bettor enters.</p>`],
+            <p>ESPN still provides one book's spread and total (<b>DraftKings</b>). It prefills the spread and total fields as soon as a game is picked, before the sportsbook panel loads.</p>`],
 
         ["How bets are built", `
             <p>Every field in the Place Bet form is a dropdown: <b>League &rsaquo; Game &rsaquo; Bet type &rsaquo; selection</b>. This stops typo and keyword problems, and it records exact game and player IDs so results can be graded automatically.</p>
@@ -132,7 +134,7 @@ window.renderKB = function () {
                 <li>ESPN's endpoints are unofficial and may change or lag during games.</li>
                 <li>Only NFL and FBS college football are covered. College football has spread, moneyline and total bets only, with no player props.</li>
                 <li>Pushes and voided legs are not supported, so they are left pending for a manual decision.</li>
-                <li>Sportsbook lines depend on the free plan's monthly credits and on which books The Odds API covers for your state. There is no live odds movement.</li>
+                <li>Sportsbook lines depend on the free plan's monthly credits and on which books The Odds API covers for your state. Odds are one snapshot per game day, so there is no live odds movement.</li>
                 <li>No sign-in, so profiles are chosen from a dropdown and are not tied to a person.</li>
                 <li>The sheet refreshes every 30 seconds, so another person's change can take up to that long to appear. Google also limits how fast a script can be called, which is fine for a small group.</li>
             </ul>`],

@@ -64,12 +64,14 @@ function doPost(e) {
     return json_(r.ok ? { ok: true } : { error: r.locked ? "locked" : "bad_pin" });
   }
   // Only admins can delete things, restore backups, or change profiles.
-  const adminOnly = body.action === "remove" || body.action === "replaceAll" ||
+  const adminOnly = body.action === "remove" || body.action === "replaceAll" || body.action === "oddsRefresh" ||
     (body.action === "upsert" && body.kind === "profile");
   if (adminOnly) {
     const r = pinCheck_(body.pin);
     if (!r.ok) return json_({ error: r.locked ? "locked" : "forbidden" });
   }
+
+  if (body.action === "oddsRefresh") return json_(oddsPullAll_());   // admin: pull odds now (about 6 credits)
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -170,23 +172,38 @@ function json_(obj) {
 /* ============================================================
    Sportsbook odds via The Odds API (the-odds-api.com)
    The API key lives in Script Properties as ODDS_API_KEY (Project Settings),
-   never in the website. Results are cached so the free credits last:
-     game lines ......... 3 credits per fetch (spreads + moneyline + totals)
-     one prop market .... 1 credit per game and market
+   never in the website.
+
+   ONE PULL PER GAME DAY. A timer (see installOddsTrigger) runs oddsTick every
+   15 minutes. On a day with games it waits until 3 hours before the FIRST
+   kickoff, then pulls every league that plays that day, once, and saves the
+   result with its pull time. Everything on the website reads that saved copy,
+   so opening pages never spends credits.
+     game lines ......... 3 credits per league per game day
+     one prop market .... 1 credit per game and market (on demand, capped per day)
      status check ....... free
    ============================================================ */
 const ODDS_BASE = "https://api.the-odds-api.com/v4/";
 const ODDS_SPORTS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf" };
+const ESPN_BOARD = {
+  nfl: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+  ncaaf: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&limit=100"
+};
 // Books to keep (Odds API keys). Keep in sync with BOOKS in the site's config.js.
 const BOOK_KEYS = ["draftkings", "fanduel", "betmgm", "williamhill_us", "espnbet", "fanatics", "hardrockbet", "betrivers"];
-const ODDS_TTL = 21600;           // seconds to cache results: 6 hours, the most CacheService allows
-const ODDS_MIN_CREDITS = 40;      // stop calling the odds service when fewer credits than this remain this month
+const ODDS_TZ = "America/New_York";             // decides which calendar day a game belongs to
+const ODDS_LEAD_MS = 3 * 3600 * 1000;           // pull this long before the first kickoff of the day
+const ODDS_MIN_CREDITS = 40;                    // stop calling the odds service below this many credits
+const ODDS_PROP_DAILY_MAX = 10;                 // player-prop credits allowed per day
+const PROP_CACHE_SECONDS = 21600;               // prop lines are cached for 6 hours (the most CacheService allows)
 // Only these player-prop markets can be requested (stops arbitrary credit spending)
 const PROP_MARKET_ALLOW = [
   "player_pass_yds", "player_pass_tds", "player_pass_completions", "player_pass_attempts",
   "player_pass_interceptions", "player_rush_yds", "player_rush_attempts", "player_reception_yds",
   "player_receptions", "player_rush_reception_yds", "player_anytime_td", "player_field_goals"
 ];
+
+function dayKey_(ms) { return Utilities.formatDate(new Date(ms), ODDS_TZ, "yyyy-MM-dd"); }
 
 function oddsFetch_(path, query, free) {
   const key = PropertiesService.getScriptProperties().getProperty("ODDS_API_KEY");
@@ -207,24 +224,138 @@ function cached_(key, produce) {
   const cache = CacheService.getScriptCache(), hit = cache.get(key);
   if (hit) return JSON.parse(hit);
   const out = produce();
-  if (!out.error) { try { cache.put(key, JSON.stringify(out), ODDS_TTL); } catch (e) {} }
+  if (!out.error) { try { cache.put(key, JSON.stringify(out), PROP_CACHE_SECONDS); } catch (e) {} }
   return out;
 }
 
+/* ---------- Saved daily snapshot (kept in Script Properties, in chunks) ---------- */
+function saveSnap_(league, snap) {
+  const props = PropertiesService.getScriptProperties();
+  const s = JSON.stringify(snap), CH = 8000, n = Math.ceil(s.length / CH);
+  const old = Number(props.getProperty("snap:" + league + ":n") || 0), set = {};
+  for (let i = 0; i < n; i++) set["snap:" + league + ":" + i] = s.substr(i * CH, CH);
+  set["snap:" + league + ":n"] = String(n);
+  props.setProperties(set);
+  for (let i = n; i < old; i++) props.deleteProperty("snap:" + league + ":" + i);
+}
+
+function readSnap_(league) {
+  const props = PropertiesService.getScriptProperties();
+  const n = Number(props.getProperty("snap:" + league + ":n") || 0);
+  if (!n) return null;
+  let s = "";
+  for (let i = 0; i < n; i++) s += props.getProperty("snap:" + league + ":" + i) || "";
+  try { return JSON.parse(s); } catch (e) { return null; }
+}
+
+// Spreads + moneyline + totals for every game in a league (3 credits)
+function oddsGamesFetch_(league) {
+  const r = oddsFetch_("sports/" + ODDS_SPORTS[league] + "/odds/", "&regions=us&oddsFormat=american&markets=h2h,spreads,totals");
+  if (r.error) return r;
+  const events = r.data.map(function (ev) {
+    const books = [];
+    (ev.bookmakers || []).forEach(function (b) {
+      if (BOOK_KEYS.indexOf(b.key) < 0) return;
+      const out = { key: b.key, title: b.title };
+      (b.markets || []).forEach(function (m) {
+        if (m.key === "h2h") {
+          out.ml = {};
+          m.outcomes.forEach(function (o) { out.ml[o.name === ev.home_team ? "home" : "away"] = o.price; });
+        } else if (m.key === "spreads") {
+          out.spread = {};
+          m.outcomes.forEach(function (o) { out.spread[o.name === ev.home_team ? "home" : "away"] = { point: o.point, price: o.price }; });
+        } else if (m.key === "totals") {
+          out.total = {};
+          m.outcomes.forEach(function (o) {
+            out.total.point = o.point;
+            out.total[o.name === "Over" ? "over" : "under"] = o.price;
+          });
+        }
+      });
+      books.push(out);
+    });
+    return { id: ev.id, home: ev.home_team, away: ev.away_team, start: ev.commence_time, books: books };
+  });
+  return { events: events, fetchedAt: new Date().getTime(), remaining: r.remaining };
+}
+
+function oddsPullLeagues_(leagues) {
+  const pulled = [];
+  for (let i = 0; i < leagues.length; i++) {
+    const snap = oddsGamesFetch_(leagues[i]);
+    if (snap.error) return { error: snap.error, pulled: pulled };
+    saveSnap_(leagues[i], snap);
+    pulled.push({ league: leagues[i], games: snap.events.length, remaining: snap.remaining });
+  }
+  return { ok: true, pulled: pulled, at: new Date().getTime() };
+}
+
+// Admin "pull now" button: both leagues, regardless of the schedule (about 6 credits)
+function oddsPullAll_() { return oddsPullLeagues_(Object.keys(ODDS_SPORTS)); }
+
+/* ---------- The daily schedule ---------- */
+// Runs every 15 minutes (timer). Does nothing until 3 hours before the first kickoff of a game day,
+// then pulls once for that day.
+function oddsTick() {
+  const props = PropertiesService.getScriptProperties();
+  const now = new Date().getTime(), day = dayKey_(now);
+  if (props.getProperty("odds:day:" + day)) return;                  // already pulled today
+  const tries = Number(props.getProperty("odds:tries:" + day) || 0);
+  if (tries >= 3) return;                                            // don't burn credits on repeated failures
+
+  let first = null, anyOpen = false;
+  const leaguesToday = [];
+  Object.keys(ESPN_BOARD).forEach(function (lg) {                    // ESPN's scoreboard is free
+    let events = [];
+    try { events = JSON.parse(UrlFetchApp.fetch(ESPN_BOARD[lg], { muteHttpExceptions: true }).getContentText()).events || []; } catch (e) {}
+    const today = events.filter(function (e) { return e.date && dayKey_(new Date(e.date).getTime()) === day; });
+    if (!today.length) return;
+    leaguesToday.push(lg);
+    today.forEach(function (e) {
+      const t = new Date(e.date).getTime();
+      if (first === null || t < first) first = t;
+      if (e.status && e.status.type && e.status.type.state !== "post") anyOpen = true;
+    });
+  });
+  if (!leaguesToday.length || !anyOpen) return;                      // no games today, or all finished
+  if (now < first - ODDS_LEAD_MS) return;                            // too early: wait for 3 hours before the first kickoff
+
+  props.setProperty("odds:tries:" + day, String(tries + 1));
+  const r = oddsPullLeagues_(leaguesToday);
+  if (r.ok) props.setProperty("odds:day:" + day, String(now));
+}
+
+// Run this ONCE from the Apps Script editor (select it, click Run) to start the timer.
+function installOddsTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "oddsTick") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("oddsTick").timeBased().everyMinutes(15).create();
+}
+
+/* ---------- What the website asks for ---------- */
 function oddsRoute_(p) {
-  if (p.status) {                                        // free call: just reports remaining credits
+  if (p.status) {                                        // free call: credits left, last pull times, timer state
     const r = oddsFetch_("sports/", "", true);
-    return json_(r.error ? { error: r.error } : { ok: true, remaining: r.remaining, used: r.used });
+    if (r.error) return json_({ error: r.error });
+    const snapTime = function (lg) { const s = readSnap_(lg); return s ? s.fetchedAt : null; };
+    let timer = null;
+    try { timer = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === "oddsTick"; }); } catch (e) {}
+    return json_({ ok: true, remaining: r.remaining, used: r.used, lastPull: { nfl: snapTime("nfl"), ncaaf: snapTime("ncaaf") }, timer: timer });
   }
   const sport = ODDS_SPORTS[p.league];
   if (!sport) return json_({ error: "bad_league" });
 
-  if (p.eventId) {                                       // one player-prop market for one game
+  if (p.eventId) {                                       // one player-prop market for one game (on demand, capped per day)
     if (PROP_MARKET_ALLOW.indexOf(p.market) < 0) return json_({ error: "bad_market" });
     const id = String(p.eventId).replace(/[^A-Za-z0-9_-]/g, "");
     return json_(cached_("prop:" + id + ":" + p.market, function () {
+      const props = PropertiesService.getScriptProperties(), pk = "odds:props:" + dayKey_(new Date().getTime());
+      const usedToday = Number(props.getProperty(pk) || 0);
+      if (usedToday >= ODDS_PROP_DAILY_MAX) return { error: "prop_limit" };
       const r = oddsFetch_("sports/" + sport + "/events/" + id + "/odds", "&regions=us&oddsFormat=american&markets=" + p.market);
       if (r.error) return r;
+      props.setProperty(pk, String(usedToday + 1));
       const rows = [];
       (r.data.bookmakers || []).forEach(function (b) {
         if (BOOK_KEYS.indexOf(b.key) < 0) return;
@@ -238,35 +369,8 @@ function oddsRoute_(p) {
     }));
   }
 
-  return json_(cached_("games:" + p.league, function () {  // spreads + moneyline + totals for every game
-    const r = oddsFetch_("sports/" + sport + "/odds/", "&regions=us&oddsFormat=american&markets=h2h,spreads,totals");
-    if (r.error) return r;
-    const events = r.data.map(function (ev) {
-      const books = [];
-      (ev.bookmakers || []).forEach(function (b) {
-        if (BOOK_KEYS.indexOf(b.key) < 0) return;
-        const out = { key: b.key, title: b.title };
-        (b.markets || []).forEach(function (m) {
-          if (m.key === "h2h") {
-            out.ml = {};
-            m.outcomes.forEach(function (o) { out.ml[o.name === ev.home_team ? "home" : "away"] = o.price; });
-          } else if (m.key === "spreads") {
-            out.spread = {};
-            m.outcomes.forEach(function (o) { out.spread[o.name === ev.home_team ? "home" : "away"] = { point: o.point, price: o.price }; });
-          } else if (m.key === "totals") {
-            out.total = {};
-            m.outcomes.forEach(function (o) {
-              out.total.point = o.point;
-              out.total[o.name === "Over" ? "over" : "under"] = o.price;
-            });
-          }
-        });
-        books.push(out);
-      });
-      return { id: ev.id, home: ev.home_team, away: ev.away_team, start: ev.commence_time, books: books };
-    });
-    return { events: events, fetchedAt: new Date().getTime(), remaining: r.remaining };
-  }));
+  // game lines: just read today's saved snapshot. Never spends credits.
+  return json_(readSnap_(p.league) || { events: [], fetchedAt: null, none: true });
 }
 
 /* ============================================================

@@ -267,6 +267,16 @@ const Store = (() => {
     let adminPin = null;
     const isAdmin = () => adminPin !== null;
     const adminLogout = () => { adminPin = null; };
+    async function adminPost(body) {              // an admin-only call (the script checks the PIN)
+        if (!cfg) throw new Error("no_sheet");
+        const res = await fetch(cfg.url, {
+            method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ secret: cfg.secret, pin: adminPin, ...body })
+        });
+        const j = await res.json();
+        if (j.error) throw new Error(j.error);
+        return j;
+    }
     async function adminLogin(pin) {
         pin = String(pin || "");
         if (!cfg) {
@@ -306,7 +316,7 @@ const Store = (() => {
         sync: { enabled: !!cfg, status: () => syncStatus, pending, onStatus: f => statusListeners.push(f), pull },
         COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
         bets, removedBets, addBet, setLegStatus, recentHits, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
-        adminLogin, adminLogout, isAdmin, exportData, importData,
+        adminLogin, adminLogout, isAdmin, adminPost, exportData, importData,
         reload() { db = Object.assign({ profiles: [], bets: [], pinHash: null, outbox: [] }, load()); }
     };
 })();

@@ -13,7 +13,7 @@ function showGate(msg) {
 }
 function showTools() {
     $("gate").hidden = true; $("tools").hidden = false;
-    renderProfiles(); renderBets();
+    renderProfiles(); renderBets(); checkOdds();
 }
 
 const ERRORS = {
@@ -106,6 +106,36 @@ $("removed-bets").onclick = e => {
     const { restore, purge } = e.target.dataset;
     if (restore) { Store.restoreBet(restore); renderBets(); renderProfiles(); }
     else if (purge && confirm("Delete this bet forever? This can't be undone.")) { Store.deleteBet(purge); renderBets(); }
+};
+
+/* ---------- Odds ---------- */
+const ODDS_ERR = {
+    no_key: "No odds API key is saved in Script Properties.",
+    credits_low: "Credits are low, so the script stopped calling the odds service.",
+    locked: "Too many wrong PIN tries. Locked for 5 minutes."
+};
+async function checkOdds() {
+    const box = $("odds-status");
+    box.textContent = "Checking\u2026";
+    try {
+        const s = await Odds.status();
+        const line = lg => s.lastPull?.[lg] ? Odds.pulledAt(s.lastPull[lg]) : "never";
+        box.innerHTML = `<b>${s.remaining ?? "?"}</b> credits left this month${s.used != null ? " (" + s.used + " used)" : ""}<br>
+            Last pull: NFL <b>${esc(line("nfl"))}</b> \u00b7 College <b>${esc(line("ncaaf"))}</b><br>
+            Daily timer: <b>${s.timer === true ? "running" : s.timer === false ? "NOT installed (run installOddsTrigger in Apps Script)" : "unknown"}</b>`;
+    } catch (e) { box.textContent = ODDS_ERR[e.message] || "Couldn't reach the odds service (" + e.message + ")."; }
+}
+$("odds-check").onclick = checkOdds;
+$("odds-pull").onclick = async () => {
+    const msg = $("odds-msg"), btn = $("odds-pull");
+    if (!confirm("Pull odds for NFL and college now? This uses about 6 of your monthly credits.")) return;
+    btn.disabled = true; msg.textContent = "Pulling\u2026";
+    try {
+        const r = await Store.adminPost({ action: "oddsRefresh" });
+        msg.textContent = "Pulled: " + (r.pulled || []).map(p => p.league.toUpperCase() + " " + p.games + " games").join(", ") + ".";
+        checkOdds();
+    } catch (e) { msg.textContent = ODDS_ERR[e.message] || (e.message === "forbidden" ? "The PIN was refused." : "Pull failed (" + e.message + ")."); }
+    btn.disabled = false;
 };
 
 /* ---------- Backup ---------- */
