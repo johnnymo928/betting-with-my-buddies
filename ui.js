@@ -53,7 +53,7 @@ const UI = (() => {
             </header>
             <ul class="legs">${legs}</ul>
             <footer>
-                <span>${bet.private ? "🔒 Private" : money(bet.stake)} @ ${fmtOdds(bet.odds)}</span>
+                <span>${bet.private ? "🔒 Private" : money(bet.stake)} @ ${fmtOdds(bet.odds)}${bet.book ? " · " + esc(typeof Odds !== "undefined" ? Odds.bookLabel(bet.book) : bet.book) : ""}</span>
                 ${bet.type === "parlay" && status === "pending" ? `<span>${hit}/${bet.legs.length} hit</span>` : ""}
                 ${result}
             </footer>

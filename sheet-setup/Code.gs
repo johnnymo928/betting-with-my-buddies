@@ -38,6 +38,7 @@ const JSON_COL = HEADERS.length;   // 14
 // Load everything. Private stakes are removed from what other browsers receive.
 function doGet(e) {
   if (!e.parameter || e.parameter.secret !== SECRET) return json_({ error: "unauthorized" });
+  if (e.parameter.action === "odds") return oddsRoute_(e.parameter);
   const all = readAll_();
   all.bets = all.bets.map(function (b) {
     if (!b.private) return b;
@@ -146,4 +147,101 @@ function writeAll_(all) {
 
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/* ============================================================
+   Sportsbook odds via The Odds API (the-odds-api.com)
+   The API key lives in Script Properties as ODDS_API_KEY (Project Settings),
+   never in the website. Results are cached so the free credits last:
+     game lines ......... 3 credits per fetch (spreads + moneyline + totals)
+     one prop market .... 1 credit per game and market
+     status check ....... free
+   ============================================================ */
+const ODDS_BASE = "https://api.the-odds-api.com/v4/";
+const ODDS_SPORTS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf" };
+// Books to keep (Odds API keys). Keep in sync with BOOKS in the site's config.js.
+const BOOK_KEYS = ["draftkings", "fanduel", "betmgm", "williamhill_us", "espnbet", "fanatics", "hardrockbet", "betrivers"];
+const ODDS_TTL = 900;   // seconds to cache (15 minutes)
+// Only these player-prop markets can be requested (stops arbitrary credit spending)
+const PROP_MARKET_ALLOW = [
+  "player_pass_yds", "player_pass_tds", "player_pass_completions", "player_pass_attempts",
+  "player_pass_interceptions", "player_rush_yds", "player_rush_attempts", "player_reception_yds",
+  "player_receptions", "player_rush_reception_yds", "player_anytime_td", "player_field_goals"
+];
+
+function oddsFetch_(path, query) {
+  const key = PropertiesService.getScriptProperties().getProperty("ODDS_API_KEY");
+  if (!key) return { error: "no_key" };
+  const res = UrlFetchApp.fetch(ODDS_BASE + path + "?apiKey=" + encodeURIComponent(key) + query, { muteHttpExceptions: true });
+  const h = res.getHeaders(), code = res.getResponseCode();
+  const rem = h["x-requests-remaining"] || h["X-Requests-Remaining"];
+  const used = h["x-requests-used"] || h["X-Requests-Used"];
+  if (code !== 200) return { error: "odds_http_" + code, remaining: rem === undefined ? null : Number(rem) };
+  return { data: JSON.parse(res.getContentText()), remaining: rem === undefined ? null : Number(rem), used: used === undefined ? null : Number(used) };
+}
+
+function cached_(key, produce) {
+  const cache = CacheService.getScriptCache(), hit = cache.get(key);
+  if (hit) return JSON.parse(hit);
+  const out = produce();
+  if (!out.error) { try { cache.put(key, JSON.stringify(out), ODDS_TTL); } catch (e) {} }
+  return out;
+}
+
+function oddsRoute_(p) {
+  if (p.status) {                                        // free call: just reports remaining credits
+    const r = oddsFetch_("sports/", "");
+    return json_(r.error ? { error: r.error } : { ok: true, remaining: r.remaining, used: r.used });
+  }
+  const sport = ODDS_SPORTS[p.league];
+  if (!sport) return json_({ error: "bad_league" });
+
+  if (p.eventId) {                                       // one player-prop market for one game
+    if (PROP_MARKET_ALLOW.indexOf(p.market) < 0) return json_({ error: "bad_market" });
+    const id = String(p.eventId).replace(/[^A-Za-z0-9_-]/g, "");
+    return json_(cached_("prop:" + id + ":" + p.market, function () {
+      const r = oddsFetch_("sports/" + sport + "/events/" + id + "/odds", "&regions=us&oddsFormat=american&markets=" + p.market);
+      if (r.error) return r;
+      const rows = [];
+      (r.data.bookmakers || []).forEach(function (b) {
+        if (BOOK_KEYS.indexOf(b.key) < 0) return;
+        (b.markets || []).forEach(function (m) {
+          (m.outcomes || []).forEach(function (o) {
+            rows.push({ book: b.key, title: b.title, player: o.description || "", side: o.name, price: o.price, point: o.point === undefined ? null : o.point });
+          });
+        });
+      });
+      return { rows: rows, fetchedAt: new Date().getTime(), remaining: r.remaining };
+    }));
+  }
+
+  return json_(cached_("games:" + p.league, function () {  // spreads + moneyline + totals for every game
+    const r = oddsFetch_("sports/" + sport + "/odds/", "&regions=us&oddsFormat=american&markets=h2h,spreads,totals");
+    if (r.error) return r;
+    const events = r.data.map(function (ev) {
+      const books = [];
+      (ev.bookmakers || []).forEach(function (b) {
+        if (BOOK_KEYS.indexOf(b.key) < 0) return;
+        const out = { key: b.key, title: b.title };
+        (b.markets || []).forEach(function (m) {
+          if (m.key === "h2h") {
+            out.ml = {};
+            m.outcomes.forEach(function (o) { out.ml[o.name === ev.home_team ? "home" : "away"] = o.price; });
+          } else if (m.key === "spreads") {
+            out.spread = {};
+            m.outcomes.forEach(function (o) { out.spread[o.name === ev.home_team ? "home" : "away"] = { point: o.point, price: o.price }; });
+          } else if (m.key === "totals") {
+            out.total = {};
+            m.outcomes.forEach(function (o) {
+              out.total.point = o.point;
+              out.total[o.name === "Over" ? "over" : "under"] = o.price;
+            });
+          }
+        });
+        books.push(out);
+      });
+      return { id: ev.id, home: ev.home_team, away: ev.away_team, start: ev.commence_time, books: books };
+    });
+    return { events: events, fetchedAt: new Date().getTime(), remaining: r.remaining };
+  }));
 }

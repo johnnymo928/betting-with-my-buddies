@@ -114,6 +114,23 @@ function render() {
         <tbody>${trows.map(([k, g]) => `<tr><td>${esc(k)}</td><td>${g.n}</td><td>${g.hit}</td><td>${pct(g.hit, g.n)}</td></tr>`).join("")}</tbody>`
         : `<tbody><tr><td class="muted">Nothing settled yet.</td></tr></tbody>`;
 
+    /* Results by sportsbook (private bets count in the record but not in dollars) */
+    const byBook = {};
+    mine.filter(b => betStatus(b) !== "pending").forEach(b => {
+        const k = b.book ? Odds.bookLabel(b.book) : "Not specified";
+        const g = byBook[k] ||= { won: 0, lost: 0, profit: 0, staked: 0 };
+        betStatus(b) === "won" ? g.won++ : g.lost++;
+        if (!b.private) { g.profit += betProfit(b); g.staked += b.stake; }
+    });
+    const brows = Object.entries(byBook).sort((a, b) => (b[1].won + b[1].lost) - (a[1].won + a[1].lost));
+    $("books").innerHTML = brows.length ? `
+        <thead><tr><th>Sportsbook</th><th>Record</th><th>Win %</th><th>Profit</th><th>ROI</th></tr></thead>
+        <tbody>${brows.map(([k, g]) => `<tr>
+            <td>${esc(k)}</td><td>${g.won}-${g.lost}</td><td>${pct(g.won, g.won + g.lost)}</td>
+            <td class="${sgn(g.profit)}">${money(g.profit)}</td>
+            <td class="${g.staked ? sgn(g.profit) : ""}">${g.staked ? (g.profit / g.staked * 100).toFixed(1) + "%" : "–"}</td></tr>`).join("")}</tbody>`
+        : `<tbody><tr><td class="muted">Nothing settled yet.</td></tr></tbody>`;
+
     /* Killers: lost parlays and which leg(s) failed */
     const dead = mine.filter(b => b.type === "parlay" && betStatus(b) === "lost")
         .sort((a, b) => b.createdAt - a.createdAt);

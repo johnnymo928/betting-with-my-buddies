@@ -443,3 +443,19 @@ optgroup{color:var(--muted);font-style:normal}
 .sync[data-state=synced]::before{background:var(--green)}
 .sync[data-state=error]{color:var(--red)}
 .sync[data-state=error]::before{background:var(--red)}
+
+/* ---------- Sportsbook lines panel ---------- */
+.lines{grid-column:1 / -1;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px}
+.lines[hidden]{display:none}
+.lines-head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;margin-bottom:6px}
+.lines-msg{color:var(--muted);margin:2px 0}
+.lines-note{margin-top:6px;font-size:11px}
+.lines-table{width:100%;border-collapse:collapse}
+.lines-table td{padding:6px 4px;border-top:1px solid var(--line);vertical-align:middle}
+.lines-table .lb{font-weight:600;white-space:nowrap}
+.lines-table .lt{font-variant-numeric:tabular-nums;color:var(--text)}
+.lines-table .la{text-align:right;white-space:nowrap}
+.lines-table tr.used{background:rgba(62,166,255,.12)}
+.lines-table tr.used .btn{border-color:var(--accent);color:var(--accent)}
+.btn.sm{padding:4px 10px;font-size:12px;margin-left:4px}
+.best{background:rgba(52,211,153,.16);color:var(--green);font-size:10px;font-weight:800;letter-spacing:.06em;padding:1px 6px;border-radius:4px;text-transform:uppercase}

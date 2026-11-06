@@ -49,9 +49,23 @@
             </tbody></table>
             <p class="hint">If a feed fails, the page keeps showing the last good data and retries on the next cycle.</p>`],
 
-        ["Betting lines and odds", `
-            <p>ESPN supplies one book's lines for each game, named in the feed as <b>DraftKings</b>. We read the spread (for example "KC -6.5") and the over/under, and use them to <b>prefill</b> the spread and total fields in the bet builder. You can change them.</p>
-            <p><b>Not available:</b> player prop lines, and lines from FanDuel, BetMGM, Caesars or other apps. There is no free public API for them. The prop line and the odds are always entered by the bettor, so risk and gain match whichever app was used.</p>
+        ["Sportsbook odds (The Odds API)", `
+            <p>Lines from DraftKings, FanDuel, BetMGM, Caesars and other books come from <b>The Odds API</b> (the-odds-api.com). The site never talks to it directly. It asks the Google Apps Script, which holds the API key privately in <i>Script Properties</i> as <code>ODDS_API_KEY</code>, fetches the odds, and caches them.</p>
+            <table class="table"><thead><tr><th>Request</th><th>Credits used</th><th>Cached</th></tr></thead><tbody>
+                <tr><td>Game lines for a league (spread, moneyline, total)</td><td>3</td><td>15 minutes in the script, 5 minutes in the browser</td></tr>
+                <tr><td>One player-prop market for one game</td><td>1</td><td>15 minutes</td></tr>
+                <tr><td>Status check (the button above)</td><td>0</td><td>Not cached</td></tr>
+            </tbody></table>
+            <p>Lines are only fetched when someone builds a bet, never in the background, so the free plan's monthly credits last. Use the test button above to see how many credits are left.</p>
+            <ul class="kb-list">
+                <li><b>Where it shows:</b> a "Lines by sportsbook" panel appears inside each leg of the Place Bet form. <b>Use</b> fills in the line and the odds and sets the sportsbook. For a parlay, once every leg has a price the total odds are worked out for you.</li>
+                <li><b>Which books:</b> the list is <code>BOOKS</code> in <code>config.js</code> and <code>BOOK_KEYS</code> in the Apps Script. Change both together, then publish a new script version.</li>
+                <li><b>Matching games:</b> ESPN games are matched to The Odds API by team name. A game with no match shows "No sportsbook lines for this game yet".</li>
+                <li><b>Prop coverage:</b> not every stat has sportsbook lines. Pass+Rush yards, rush TDs, sacks and tackles have none, and the panel says so.</li>
+                <li><b>Changing the key:</b> Apps Script &rsaquo; Project Settings &rsaquo; Script Properties &rsaquo; <code>ODDS_API_KEY</code>. The key is never stored on the website.</li>
+                <li><b>Odds move:</b> prices are a snapshot, so confirm in the app before placing the bet.</li>
+            </ul>
+            <p>ESPN still provides one book's spread and total (<b>DraftKings</b>). It prefills the spread and total fields as soon as a game is picked, before the sportsbook panel loads.</p>
             <p><b>Risk and gain</b> are calculated locally: <i>to win = stake x (odds/100)</i> for positive American odds, or <i>stake x (100/|odds|)</i> for negative odds. A parlay uses the combined odds the bettor enters.</p>`],
 
         ["How bets are built", `
@@ -110,7 +124,7 @@
                 <li>ESPN's endpoints are unofficial and may change or lag during games.</li>
                 <li>Only NFL and FBS college football are covered. College football has spread, moneyline and total bets only, with no player props.</li>
                 <li>Pushes and voided legs are not supported, so they are left pending for a manual decision.</li>
-                <li>No live odds movement, and no lines from individual sportsbooks.</li>
+                <li>Sportsbook lines depend on the free plan's monthly credits and on which books The Odds API covers for your state. There is no live odds movement.</li>
                 <li>No sign-in, so profiles are chosen from a dropdown and are not tied to a person.</li>
                 <li>The sheet refreshes every 30 seconds, so another person's change can take up to that long to appear. Google also limits how fast a script can be called, which is fine for a small group.</li>
             </ul>`],
@@ -125,6 +139,7 @@
                 <tr><td><code>config.js</code></td><td>The Google Sheet web app URL and password</td></tr>
                 <tr><td><code>sheet-setup/Code.gs</code></td><td>The Apps Script that runs inside the sheet (a copy, not used by the site)</td></tr>
                 <tr><td><code>live.js</code></td><td>ESPN games, rosters, box scores and automatic grading</td></tr>
+                <tr><td><code>odds.js</code></td><td>Sportsbook lines through the script (The Odds API), game matching, parlay odds math</td></tr>
                 <tr><td><code>ui.js</code>, <code>nav.js</code>, <code>style.css</code></td><td>Shared bet card, nav bar, styling</td></tr>
             </tbody></table>`]
     ];
@@ -146,6 +161,13 @@
                     rows.push(`${l.label} roster OK (${r.length} players for ${games[0].teams[0].abbr})`);
                 }
             } catch (e) { rows.push(`${l.label} FAILED (${e.message})`); }
+        }
+        try {
+            const s = await Odds.status();
+            rows.push(`Sportsbook odds OK (${s.remaining ?? "?"} credits left this month${s.used != null ? ", " + s.used + " used" : ""})`);
+        } catch (e) {
+            rows.push(e.message === "no_key" ? "Sportsbook odds: no API key saved in Script Properties"
+                : `Sportsbook odds FAILED (${e.message})`);
         }
         out.innerHTML = rows.map(esc).join("<br>");
     };

@@ -141,7 +141,7 @@ const Store = (() => {
        A parlay loses as soon as one leg loses, wins when every leg wins. */
     const bets = () => db.bets.slice().sort((a, b) => b.createdAt - a.createdAt);
 
-    function addBet({ profileId, type, stake, odds, legs, privateAmount }) {
+    function addBet({ profileId, type, stake, odds, legs, privateAmount, book }) {
         if (!profile(profileId)) throw new Error("Pick a profile.");
         // a leg is a plain string (custom) or { text, pick } built from the dropdowns
         const clean = legs.map(l => typeof l === "string" ? { text: l.trim() } : { text: String(l.text).trim(), pick: l.pick })
@@ -151,7 +151,7 @@ const Store = (() => {
         if (!(stake > 0)) throw new Error("Enter a stake above 0.");
         if (!Number.isFinite(odds) || Math.abs(odds) < 100) throw new Error("Odds must be American, like -110 or +250.");
         const bet = {
-            id: uid(), profileId, createdAt: Date.now(), type, stake, odds, private: !!privateAmount,
+            id: uid(), profileId, createdAt: Date.now(), type, stake, odds, private: !!privateAmount, book: book || "",
             legs: (type === "single" ? clean.slice(0, 1) : clean).map(l => ({ id: uid(), text: l.text, status: "pending", ...(l.pick ? { pick: l.pick } : {}) }))
         };
         db.bets.push(bet); save(); pushBet(bet.id); return bet;

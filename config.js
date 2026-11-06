@@ -5,3 +5,16 @@
    Set SHEET_URL to "" to go back to browser-only storage. */
 const SHEET_URL = "https://script.google.com/macros/s/AKfycbxr3e86ryE7HzVSr4cqcUdvuErhWYpNEwOM5_txLx_fhkGPIUKPjttn4sZpsmI2fjyd/exec";
 const SHEET_SECRET = "bwmb-m4Rk7qX2vL9p";
+
+/* Sportsbooks shown in the bet form and the odds panel: [Odds API key, label].
+   Keep the keys in sync with BOOK_KEYS in sheet-setup/Code.gs. */
+const BOOKS = [
+    ["draftkings", "DraftKings"],
+    ["fanduel", "FanDuel"],
+    ["betmgm", "BetMGM"],
+    ["williamhill_us", "Caesars"],
+    ["espnbet", "ESPN BET"],
+    ["fanatics", "Fanatics"],
+    ["hardrockbet", "Hard Rock Bet"],
+    ["betrivers", "BetRivers"]
+];

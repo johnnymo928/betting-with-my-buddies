@@ -50,11 +50,14 @@ function legRow() {
             <label class="f-game-wrap">Game <select class="f-game"></select></label>
             <label>Bet type <select class="f-kind">${opts(KINDS, "spread")}</select></label>
             <div class="kind-fields"></div>
+            <div class="lines" hidden></div>
         </div>
         <button type="button" class="btn icon rm" aria-label="Remove leg">&times;</button>`;
 
     const q = s => row.querySelector(s);
     const st = { games: [], game: null, players: [], loadErr: false };
+    row._price = null; row._book = null;          // set when a sportsbook line is chosen with "Use"
+    let token = 0;                                // ignores stale odds responses
 
     /* ----- games ----- */
     async function loadGames() {
@@ -90,10 +93,11 @@ function legRow() {
                 <label>Team <select class="f-team">${teamOpts(false)}</select></label>
                 <label>Spread <input type="number" step="0.5" class="f-line" placeholder="-6.5"></label>`;
             q(".f-line").oninput = e => e.target.dataset.touched = "1";
-            q(".f-team").onchange = prefillSpread;
+            q(".f-team").onchange = () => { prefillSpread(); refreshLines(); };
             prefillSpread();
         } else if (kind === "ml") {
             box.innerHTML = `<label>Team to win <select class="f-team">${teamOpts(false)}</select></label>`;
+            q(".f-team").onchange = refreshLines;
         } else if (kind === "total") {
             box.innerHTML = `
                 <label>Pick <select class="f-side">${sideOpts}</select></label>
@@ -111,10 +115,118 @@ function legRow() {
                 <label>Pick <select class="f-side">${sideOpts}</select></label>
                 <label>Line <input type="number" step="0.5" min="0" class="f-line" placeholder="249.5"></label>`;
             q(".f-team").onchange = renderPlayers;
-            q(".f-player").onchange = suggestStat;
+            q(".f-player").onchange = () => { suggestStat(); refreshLines(); };
+            q(".f-stat").onchange = refreshLines;
             loadPlayers();
         }
+        refreshLines();
     }
+
+    /* ----- sportsbook lines (see odds.js) ----- */
+    const panel = q(".lines");
+    // editing any field by hand drops a chosen sportsbook price, since it may no longer match
+    function clearUsed() {
+        row._price = null; row._book = null;
+        panel.querySelectorAll("tr.used").forEach(t => t.classList.remove("used"));
+    }
+    q(".kind-fields").addEventListener("input", clearUsed);
+    q(".kind-fields").addEventListener("change", clearUsed);
+
+    const showMsg = t => { panel.innerHTML = `<p class="lines-msg">${esc(t)}</p>`; };
+
+    async function refreshLines() {
+        const my = ++token, kind = q(".f-kind").value;
+        if (!Odds.enabled || kind === "custom" || !st.game) { panel.hidden = true; return; }
+        panel.hidden = false;
+        const league = q(".f-league").value;
+        try {
+            if (kind === "prop") {
+                const pid = q(".f-player")?.value;
+                if (!pid) return showMsg("Pick a player to see sportsbook lines.");
+                const p = st.players.find(x => x.id === pid);
+                if (!p) return;
+                showMsg("Loading lines…");
+                const { event } = await Odds.forGame(league, st.game);
+                if (my !== token) return;
+                if (!event) return showMsg("No sportsbook lines for this game yet.");
+                const r = await Odds.propLines(league, event.id, q(".f-stat").value, p.name);
+                if (my !== token) return;
+                if (r.unsupported) return showMsg("Sportsbooks don't list this stat.");
+                if (!r.books.length) return showMsg("No sportsbook lines for this player and stat yet.");
+                renderLines("prop", r.books, r.fetchedAt);
+            } else {
+                showMsg("Loading lines…");
+                const { event, fetchedAt } = await Odds.forGame(league, st.game);
+                if (my !== token) return;
+                if (!event || !event.books.length) return showMsg("No sportsbook lines for this game yet.");
+                renderLines(kind, event.books, fetchedAt);
+            }
+        } catch (e) {
+            console.error("odds", e);
+            if (my === token) showMsg("Sportsbook lines aren't available right now.");
+        }
+    }
+
+    function renderLines(kind, books, fetchedAt) {
+        const f = Odds.fmt, order = Odds.bookKeys();
+        const homeId = st.game.teams[1].id, teamId = q(".f-team")?.value;
+        const side = teamId === homeId ? "home" : "away";
+        const team = st.game.teams.find(t => t.id === teamId);
+        const rows = [];
+        const sorted = books.slice().sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+
+        sorted.forEach(b => {
+            const label = Odds.bookLabel(b.key);
+            if (kind === "spread" && b.spread?.[side]) {
+                const s = b.spread[side];
+                rows.push({ label, text: `${f(s.point)} (${f(s.price)})`, score: s.point * 1000 + s.price,
+                    uses: [{ text: "Use", d: { line: s.point, price: s.price, book: b.key } }] });
+            } else if (kind === "ml" && b.ml?.[side] != null) {
+                rows.push({ label, text: f(b.ml[side]), score: b.ml[side],
+                    uses: [{ text: "Use", d: { price: b.ml[side], book: b.key } }] });
+            } else if (kind === "total" && b.total?.point != null) {
+                const t = b.total, uses = [];
+                if (t.over != null) uses.push({ text: "Over", d: { line: t.point, side: "over", price: t.over, book: b.key } });
+                if (t.under != null) uses.push({ text: "Under", d: { line: t.point, side: "under", price: t.under, book: b.key } });
+                rows.push({ label, text: `${t.point} · O ${f(t.over)} / U ${f(t.under)}`, uses });
+            } else if (kind === "prop") {
+                const uses = [];
+                if (b.over != null) uses.push({ text: "Over", d: { line: b.line, side: "over", price: b.over, book: b.key } });
+                if (b.under != null) uses.push({ text: "Under", d: { line: b.line, side: "under", price: b.under, book: b.key } });
+                rows.push({ label, text: `${b.line} · O ${f(b.over)} / U ${f(b.under)}`, uses });
+            }
+        });
+        if (!rows.length) return showMsg("No sportsbook lines for this selection yet.");
+
+        const best = ["spread", "ml"].includes(kind) ? Math.max(...rows.map(r => r.score)) : null;
+        const title = kind === "spread" ? `${team?.name || ""} spread` : kind === "ml" ? `${team?.name || ""} moneyline`
+            : kind === "total" ? "Game total" : "Player prop";
+        const asOf = fetchedAt ? new Date(fetchedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+
+        panel.innerHTML = `
+            <div class="lines-head"><b>Lines by sportsbook</b> <span class="muted">${esc(title)}${asOf ? " · as of " + esc(asOf) : ""}</span></div>
+            <table class="lines-table"><tbody>${rows.map(r => `
+                <tr>
+                    <td class="lb">${esc(r.label)}${r.score === best ? ' <span class="best">Best</span>' : ""}</td>
+                    <td class="lt">${esc(r.text)}</td>
+                    <td class="la">${r.uses.map(u => `<button type="button" class="btn ghost sm" data-use="${esc(JSON.stringify(u.d))}">${u.text}</button>`).join("")}</td>
+                </tr>`).join("")}</tbody></table>
+            <p class="lines-note muted">Lines refresh about every 15 minutes. Confirm in your app before betting.</p>`;
+    }
+
+    panel.addEventListener("click", e => {
+        const btn = e.target.closest("[data-use]");
+        if (!btn) return;
+        const d = JSON.parse(btn.dataset.use);
+        const line = q(".f-line"), side = q(".f-side");
+        if (d.line != null && line) { line.value = d.line; line.dataset.touched = "1"; }
+        if (d.side && side) side.value = d.side;
+        row._price = d.price; row._book = d.book;
+        panel.querySelectorAll("tr.used").forEach(t => t.classList.remove("used"));
+        btn.closest("tr").classList.add("used");
+        $("book").value = d.book;
+        recomputeOdds();
+    });
 
     function prefillSpread() {
         const line = q(".f-line"), g = st.game;
@@ -167,7 +279,8 @@ function legRow() {
         const g = st.game;
         if (!g) throw new Error("Pick a game for every leg.");
         const league = q(".f-league").value;
-        const base = { kind, league, eventId: g.id, gameLabel: g.label };
+        const base = { kind, league, eventId: g.id, gameLabel: g.label,
+            ...(row._price != null ? { book: row._book, price: row._price } : {}) };
         const line = parseFloat(q(".f-line")?.value);
         const needLine = () => { if (!Number.isFinite(line)) throw new Error("Enter a line for every leg."); };
         const team = id => g.teams.find(t => t.id === id);
@@ -238,6 +351,22 @@ document.querySelectorAll(".seg button").forEach(btn => btn.onclick = () => {
     syncLegs(); preview();
 });
 
+/* ---------- Sportsbook + odds from chosen lines ---------- */
+function fillBooks() {
+    if (typeof BOOKS === "undefined") return;
+    $("book").innerHTML = `<option value="">Not specified</option>` +
+        BOOKS.map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join("") +
+        `<option value="other">Other</option>`;
+}
+
+// A single bet takes its leg's price. A parlay combines every leg's price once they all have one.
+function recomputeOdds() {
+    const prices = [...$("legs").children].map(r => r._price);
+    if (type === "single") { if (prices[0] != null) $("odds").value = prices[0]; }
+    else if (prices.length && prices.every(p => p != null)) $("odds").value = Odds.combine(prices);
+    preview();
+}
+
 function preview() {
     const stake = parseFloat($("stake").value), odds = parseInt($("odds").value, 10);
     $("payout-preview").textContent = stake > 0 && Math.abs(odds) >= 100
@@ -257,6 +386,7 @@ form.onsubmit = e => {
             stake: parseFloat($("stake").value),
             odds: parseInt($("odds").value, 10),
             privateAmount: $("private").checked,
+            book: $("book").value,
             legs: [...$("legs").children].map(r => r.getLeg())
         });
         localStorage.setItem("bwmb.lastProfile", $("profile").value);
@@ -294,4 +424,4 @@ async function liveTick() {
 }
 setInterval(liveTick, 45000);
 
-renderProfiles(); syncLegs(); renderBets(); liveTick();
+fillBooks(); renderProfiles(); syncLegs(); renderBets(); liveTick();
