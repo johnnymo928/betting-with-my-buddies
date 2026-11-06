@@ -1,0 +1,208 @@
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    background:#0f172a;
+    color:white;
+    font-family:Segoe UI, Arial, sans-serif;
+    padding:20px;
+}
+
+.dashboard{
+    max-width:1300px;
+    margin:auto;
+}.scoreboards{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+}
+
+.header{
+    font-size:32px;
+    font-weight:bold;
+    text-align:center;
+    margin-bottom:20px;
+    color:#60a5fa;
+}
+#clock{
+    font-size:16px;
+    color:#cbd5e1;
+    margin-top:8px;
+    font-weight:normal;
+}
+.card{
+    background:#1e293b;
+    padding:20px;
+    border-radius:16px;
+    margin-bottom:20px;
+    box-shadow:0 4px 12px rgba(0,0,0,.3);
+}.scoreboards .card{
+    min-height:390px;
+}
+
+h2{
+    color:#93c5fd;
+    margin-bottom:15px;
+}
+
+.game,
+.bet{
+    background:#334155;
+    padding:14px;
+    margin-bottom:12px;
+    border-radius:12px;
+    border-left:4px solid #3b82f6;
+    transition:.2s;
+    font-size:20px;
+}
+.fade-in{
+    animation:fadeIn .5s ease-in-out;
+}
+
+@keyframes fadeIn{
+    from{
+        opacity:0;
+    }
+
+    to{
+        opacity:1;
+    }
+}
+
+.game:hover,
+.bet:hover{
+    transform:translateY(-2px);
+}
+
+
+.game span{
+    display:block;
+    margin-top:8px;
+    font-size:14px;
+    font-weight:700;
+    color:#4ade80;
+}
+
+
+
+.ticker{
+    background:#2563eb;
+    padding:20px;
+    border-radius:12px;
+    font-weight:bold;
+    font-size:20px;
+    white-space:nowrap;
+    overflow:hidden;
+}.ticker-content{
+    display:inline-block;
+    padding-left:100%;
+    animation:scrollTicker 60s linear infinite;
+}
+
+@keyframes scrollTicker{
+    0%{
+        transform:translateX(0);
+    }
+
+    100%{
+        transform:translateX(-100%);
+    }
+}
+#nfl-status,
+#ncaaf-status{
+    color:#60a5fa;
+    font-size:14px;
+    font-weight:bold;
+    margin-bottom:12px;
+    padding:6px 10px;
+    background:#111827;
+    border-radius:6px;
+    display:inline-block;
+}
+.version{
+    text-align:right;
+    color:#64748b;
+    font-size:12px;
+    margin-bottom:8px;
+}
+.live-dot{
+    display:inline-block;
+    width:10px;
+    height:10px;
+    background:#22c55e;
+    border-radius:50%;
+    margin-right:8px;
+    animation:pulse 1.5s infinite;
+}
+
+@keyframes pulse{
+    0%{
+        opacity:1;
+    }
+
+    50%{
+        opacity:.3;
+    }
+
+    100%{
+        opacity:1;
+    }
+}
+.team-dot{
+    display:inline-block;
+    width:12px;
+    height:12px;
+    border-radius:50%;
+    margin-right:10px;
+}
+
+.bengals{
+    background:#FB4F14;
+}
+
+.chiefs{
+    background:#E31837;
+}
+
+.bills{
+    background:#00338D;
+}
+
+.cowboys{
+    background:#003594;
+}
+
+.lions{
+    background:#0076B6;
+}
+
+.packers{
+    background:#203731;
+}
+
+.ravens{
+    background:#241773;
+}
+
+.niners{
+    background:#AA0000;
+}
+
+.ohiostate{
+    background:#BB0000;
+}
+
+.michigan{
+    background:#00274C;
+}
+
+.oregon{
+    background:#154733;
+}
+
+.texas{
+    background:#BF5700;
+}
