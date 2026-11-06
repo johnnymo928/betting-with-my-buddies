@@ -9,8 +9,7 @@ const KINDS = [
     ["spread", "Spread"],
     ["ml", "Moneyline"],
     ["total", "Total (Over/Under)"],
-    ["prop", "Player prop"],
-    ["custom", "Custom (type your own)"]
+    ["prop", "Player prop"]
 ];
 // sensible default stat per position when a player is picked
 const DEFAULT_STAT = { QB: "pass_yds", RB: "rush_yds", FB: "rush_yds", WR: "rec_yds", TE: "rec_yds", PK: "fg", K: "fg" };
@@ -67,7 +66,7 @@ function legRow() {
         catch (e) { console.error(e); st.loadErr = true; }
         q(".f-game").innerHTML = st.games.length
             ? st.games.map((g, i) => `<option value="${i}">${esc(g.label)} · ${esc(g.detail)}</option>`).join("")
-            : `<option value="">${st.loadErr ? "Couldn't load games. Use Custom." : "No upcoming games"}</option>`;
+            : `<option value="">${st.loadErr ? "Couldn't load games. Try again in a moment." : "No upcoming games"}</option>`;
         pickGame();
     }
     function pickGame() {
@@ -84,11 +83,7 @@ function legRow() {
 
     function renderFields() {
         const kind = q(".f-kind").value, box = q(".kind-fields");
-        q(".f-league").closest("label").hidden = q(".f-game-wrap").hidden = kind === "custom";
-
-        if (kind === "custom") {
-            box.innerHTML = `<label>Your bet <input type="text" class="f-text" maxlength="120" placeholder="Describe the bet"></label>`;
-        } else if (kind === "spread") {
+        if (kind === "spread") {
             box.innerHTML = `
                 <label>Team <select class="f-team">${teamOpts(false)}</select></label>
                 <label>Spread <input type="number" step="0.5" class="f-line" placeholder="-6.5"></label>`;
@@ -138,7 +133,7 @@ function legRow() {
 
     async function refreshLines() {
         const my = ++token, kind = q(".f-kind").value;
-        if (!Odds.enabled || kind === "custom" || !st.game) { panel.hidden = true; return; }
+        if (!Odds.enabled || !st.game) { panel.hidden = true; return; }
         panel.hidden = false;
         const league = q(".f-league").value;
 
@@ -277,11 +272,6 @@ function legRow() {
     /* ----- read the row back as a leg ----- */
     row.getLeg = () => {
         const kind = q(".f-kind").value;
-        if (kind === "custom") {
-            const t = q(".f-text").value.trim();
-            if (!t) throw new Error("Describe your custom bet.");
-            return t;
-        }
         const g = st.game;
         if (!g) throw new Error("Pick a game for every leg.");
         const league = q(".f-league").value;
@@ -359,6 +349,7 @@ document.querySelectorAll(".seg button").forEach(btn => btn.onclick = () => {
 
 /* ---------- Sportsbook + odds from chosen lines ---------- */
 function fillBooks() {
+    $("book").closest("label").hidden = !Odds.enabled;          // sportsbook picker only exists while odds are on
     if (typeof BOOKS === "undefined") return;
     $("book").innerHTML = `<option value="">Not specified</option>` +
         BOOKS.map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join("") +

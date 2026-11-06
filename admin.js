@@ -13,7 +13,9 @@ function showGate(msg) {
 }
 function showTools() {
     $("gate").hidden = true; $("tools").hidden = false;
-    renderProfiles(); renderBets(); checkOdds();
+    renderProfiles(); renderBets();
+    $("odds-panel").hidden = !Odds.enabled;                     // hidden while odds are off
+    if (Odds.enabled) checkOdds();
 }
 
 const ERRORS = {

@@ -115,6 +115,7 @@ function render() {
         : `<tbody><tr><td class="muted">Nothing settled yet.</td></tr></tbody>`;
 
     /* Results by sportsbook (private bets count in the record but not in dollars) */
+    $("books").closest("section").hidden = !Odds.enabled;       // hidden while odds are off
     const byBook = {};
     mine.filter(b => betStatus(b) !== "pending").forEach(b => {
         const k = b.book ? Odds.bookLabel(b.book) : "Not specified";

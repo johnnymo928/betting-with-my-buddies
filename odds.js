@@ -4,7 +4,7 @@
    and here for 5, because free credits are limited.
    ============================================================ */
 const Odds = (() => {
-    const enabled = typeof SHEET_URL !== "undefined" && !!SHEET_URL;
+    const enabled = typeof SHEET_URL !== "undefined" && !!SHEET_URL && (typeof ODDS_ENABLED === "undefined" || ODDS_ENABLED === true);
     const mem = new Map();
 
     // our prop stat -> Odds API market (stats missing here have no sportsbook lines)

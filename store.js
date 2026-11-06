@@ -209,6 +209,16 @@ const Store = (() => {
         save(); pushBet(betId);
     }
 
+    // Bets lost within the last `windowMs`. A bet is lost the moment a leg loses; `legs` are the ones that missed.
+    function recentLosses(windowMs) {
+        const cutoff = Date.now() - windowMs;
+        return db.bets.filter(b => !b.deleted && betStatus(b) === "lost").map(b => {
+            const missed = b.legs.filter(l => l.status === "lost");
+            if (!missed.every(l => l.settledAt)) return null;          // settled before times were recorded: don't announce
+            return { bet: b, missed, at: Math.min(...missed.map(l => l.settledAt)) };
+        }).filter(x => x && x.at >= cutoff).sort((a, b) => b.at - a.at);
+    }
+
     // Hits settled within the last `windowMs`: individual legs, and whole bets that have fully hit.
     function recentHits(windowMs) {
         const cutoff = Date.now() - windowMs, legs = [], full = [];
@@ -315,7 +325,7 @@ const Store = (() => {
     return {
         sync: { enabled: !!cfg, status: () => syncStatus, pending, onStatus: f => statusListeners.push(f), pull },
         COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
-        bets, removedBets, addBet, setLegStatus, recentHits, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
+        bets, removedBets, addBet, setLegStatus, recentHits, recentLosses, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
         adminLogin, adminLogout, isAdmin, adminPost, exportData, importData,
         reload() { db = Object.assign({ profiles: [], bets: [], pinHash: null, outbox: [] }, load()); }
     };

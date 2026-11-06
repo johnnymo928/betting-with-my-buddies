@@ -19,7 +19,13 @@
             <p class="tagline">Scores &middot; Lines &middot; Slips</p>
         </div>
     </div>
-    <div class="clock" id="clock" aria-live="off"></div>
+    <div class="topright">
+            <div class="clock" id="clock"></div>
+            <a class="qr" id="qr" href="bet.html" aria-label="Scan to place a bet">
+                <span class="qr-code" id="qr-code" aria-hidden="true"></span>
+                <span class="qr-label">Scan to<br>place a bet</span>
+            </a>
+        </div>
 </header>
 
 <div id="hit-banners" class="hit-banners" aria-live="polite"></div>
@@ -69,6 +75,8 @@
 <script src="odds.js"></script>
 <script src="ui.js"></script>
 <script src="nav.js"></script>
+<script src="qrcode.js"></script>
+<script src="roasts.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

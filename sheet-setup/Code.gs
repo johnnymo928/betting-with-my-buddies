@@ -187,6 +187,7 @@ function json_(obj) {
      one prop market .... 1 credit per game and market (on demand, capped per day)
      status check ....... free
    ============================================================ */
+const ODDS_ENABLED = false;   // master switch: false means nothing is ever requested from the odds service
 const ODDS_BASE = "https://api.the-odds-api.com/v4/";
 const ODDS_SPORTS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf" };
 const ESPN_BOARD = {
@@ -210,6 +211,7 @@ const PROP_MARKET_ALLOW = [
 function dayKey_(ms) { return Utilities.formatDate(new Date(ms), ODDS_TZ, "yyyy-MM-dd"); }
 
 function oddsFetch_(path, query, free) {
+  if (!ODDS_ENABLED) return { error: "disabled" };
   const key = PropertiesService.getScriptProperties().getProperty("ODDS_API_KEY");
   if (!key) return { error: "no_key" };
   // credit guard: the free plan is about 500 requests a month, so stop before it runs out
@@ -295,12 +297,16 @@ function oddsPullLeagues_(leagues) {
 }
 
 // Admin "pull now" button: both leagues, regardless of the schedule (about 6 credits)
-function oddsPullAll_() { return oddsPullLeagues_(Object.keys(ODDS_SPORTS)); }
+function oddsPullAll_() {
+  if (!ODDS_ENABLED) return { error: "disabled" };
+  return oddsPullLeagues_(Object.keys(ODDS_SPORTS));
+}
 
 /* ---------- The daily schedule ---------- */
 // Runs every 15 minutes (timer). Does nothing until 3 hours before the first kickoff of a game day,
 // then pulls once for that day.
 function oddsTick() {
+  if (!ODDS_ENABLED) return;                                         // odds are switched off: do nothing
   const props = PropertiesService.getScriptProperties();
   const now = new Date().getTime(), day = dayKey_(now);
   if (props.getProperty("odds:day:" + day)) return;                  // already pulled today
@@ -339,6 +345,7 @@ function installOddsTrigger() {
 
 /* ---------- What the website asks for ---------- */
 function oddsRoute_(p) {
+  if (!ODDS_ENABLED) return json_({ error: "disabled" });
   if (p.status) {                                        // free call: credits left, last pull times, timer state
     const r = oddsFetch_("sports/", "", true);
     if (r.error) return json_({ error: r.error });

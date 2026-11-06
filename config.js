@@ -8,6 +8,10 @@ const SHEET_SECRET = "bwmb-m4Rk7qX2vL9p";
 
 /* Sportsbooks shown in the bet form and the odds panel: [Odds API key, label].
    Keep the keys in sync with BOOK_KEYS in sheet-setup/Code.gs. */
+/* Master switch for sportsbook odds. false = the odds sections are hidden and nothing is requested.
+   The same switch exists in the Apps Script (ODDS_ENABLED); set both to true to turn odds back on. */
+const ODDS_ENABLED = false;
+
 const BOOKS = [
     ["draftkings", "DraftKings"],
     ["fanduel", "FanDuel"],

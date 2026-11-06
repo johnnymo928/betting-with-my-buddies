@@ -13,7 +13,7 @@
     nav.innerHTML = links.map(([href, label]) =>
         `<a href="${href}" ${href === cur ? 'class="active" aria-current="page"' : ""}>${label}</a>`).join("");
     const bar = document.querySelector(".topbar");
-    bar.insertBefore(nav, document.getElementById("clock"));
+    bar.insertBefore(nav, bar.querySelector(".topright") || document.getElementById("clock"));
 })();
 
 /* Shared-database status badge */

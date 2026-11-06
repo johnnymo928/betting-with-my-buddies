@@ -156,9 +156,17 @@ function hitItems() {
     return items;
 }
 
+function lossItems() {
+    return Store.recentLosses(HIT_WINDOW).map(({ bet, missed }) => {
+        const what = bet.type === "parlay" ? `${bet.legs.length}-leg parlay` : esc(bet.legs[0].text);
+        const killer = bet.type === "parlay" ? ` (killed by <b>${esc(missed[0].text)}</b>)` : "";
+        return `<span class="hit-tag lost">BUSTED</span> ${esc(who(bet))}'s ${what} is dead${killer}. ${esc(Roasts.pick(bet.id, who(bet)))}`;
+    });
+}
+
 let lastTicker = "";
 function updateTicker() {
-    const items = hitItems();
+    const items = [...hitItems(), ...lossItems()];
     for (const key of Object.keys(FEEDS)) {
         state[key].games.forEach(g => {
             const score = g.phase === "pre" ? g.detail : `${g.away.score}–${g.home.score} ${g.detail}`;
@@ -171,29 +179,87 @@ function updateTicker() {
     if (html !== lastTicker) { lastTicker = html; $("ticker-content").innerHTML = html; }   // don't restart the scroll for nothing
 }
 
-/* ---------- Big green banner when a full bet hits ---------- */
-const DISMISS_KEY = "bwmb.dismissedHits";
-const dismissedHits = () => { try { return JSON.parse(localStorage.getItem(DISMISS_KEY)) || []; } catch { return []; } };
+/* ---------- Big banner when a full bet hits (green) or is lost (red, with a roast) ----------
+   Each banner stays for 15 seconds of actual viewing time, then clears by itself.
+   Time with the tab hidden does not count, and the time already shown is remembered
+   on this device, so someone who was not looking (or who reloads partway through)
+   still gets their full 15 seconds, and a banner they have fully seen never returns. */
+const HIT_SHOW_MS = 15000;
+const DISMISS_KEY = "bwmb.dismissedHits";     // bets whose banner is finished or was closed
+const SEEN_KEY = "bwmb.hitSeenMs";            // milliseconds of each banner already shown
+const readJSON = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const writeJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+const dismissedHits = () => readJSON(DISMISS_KEY, []);
+function markFinished(id) { writeJSON(DISMISS_KEY, [...new Set([...dismissedHits(), id])].slice(-200)); }
 
-function renderBanners() {
-    const seen = new Set(dismissedHits());
-    $("hit-banners").innerHTML = Store.recentHits(BANNER_WINDOW).full
-        .filter(h => !seen.has(h.bet.id))
-        .map(({ bet }) => `
-            <div class="hit-banner" role="status">
-                <div class="hit-emoji" aria-hidden="true">🎉</div>
-                <div class="hit-main">
-                    <div class="hit-title">${bet.type === "parlay" ? "PARLAY HIT!" : "BET HIT!"}</div>
-                    <div class="hit-sub">${esc(who(bet))} cashed ${bet.type === "parlay" ? bet.legs.length + " legs" : "it"}${bet.private ? "" : esc(winText(bet))}</div>
-                    <ul class="hit-legs">${bet.legs.map(l => `<li>✓ ${esc(l.text)}</li>`).join("")}</ul>
-                </div>
-                <button class="hit-close" data-dismiss="${esc(bet.id)}" aria-label="Dismiss banner">&times;</button>
-            </div>`).join("");
+function bannerHtml(it, leftMs) {
+    const bet = it.bet, win = it.kind === "win", name = who(bet);
+    const title = win ? (bet.type === "parlay" ? "PARLAY HIT!" : "BET HIT!") : (bet.type === "parlay" ? "PARLAY BUSTED!" : "BET LOST!");
+    const sub = win
+        ? `${esc(name)} cashed ${bet.type === "parlay" ? bet.legs.length + " legs" : "it"}${bet.private ? "" : esc(winText(bet))}`
+        : `${esc(name)} ${bet.private ? "took the L" : "lost " + esc(Store.money(bet.stake))}${bet.type === "parlay" ? " on a " + bet.legs.length + "-leg parlay" : ""}`;
+    const legs = win
+        ? bet.legs.map(l => `<li>\u2713 ${esc(l.text)}</li>`).join("")
+        : bet.legs.map(l => l.status === "lost" ? `<li class="x">\u2717 ${esc(l.text)}</li>` : "").join("");
+    return `
+        <div class="hit-banner ${win ? "" : "loss"}" role="status" data-id="${esc(it.key)}">
+            <div class="hit-emoji" aria-hidden="true">${win ? "\uD83C\uDF89" : "\uD83D\uDC80"}</div>
+            <div class="hit-main">
+                <div class="hit-title">${title}</div>
+                <div class="hit-sub">${sub}</div>
+                ${win ? "" : `<div class="hit-roast">\u201C${esc(Roasts.pick(bet.id, name))}\u201D</div>`}
+                <ul class="hit-legs">${legs}</ul>
+            </div>
+            <button class="hit-close" data-dismiss="${esc(it.key)}" aria-label="Dismiss banner">&times;</button>
+            <div class="hit-timer" aria-hidden="true"><i style="width:${Math.max(0, leftMs / HIT_SHOW_MS * 100)}%"></i></div>
+        </div>`;
 }
+
+// Adds banners that are due and removes ones that are finished. Banners already on screen are left
+// alone, so a data refresh never replays the entrance animation or restarts the countdown.
+function renderBanners() {
+    const box = $("hit-banners"), finished = new Set(dismissedHits()), seenMs = readJSON(SEEN_KEY, {});
+    const due = [
+        ...Store.recentHits(BANNER_WINDOW).full.map(h => ({ kind: "win", bet: h.bet, at: h.at, key: h.bet.id })),
+        ...Store.recentLosses(BANNER_WINDOW).map(l => ({ kind: "loss", bet: l.bet, at: l.at, key: "L:" + l.bet.id }))
+    ].filter(it => !finished.has(it.key) && (seenMs[it.key] || 0) < HIT_SHOW_MS).sort((a, b) => b.at - a.at);
+    const dueKeys = new Set(due.map(it => it.key));
+
+    box.querySelectorAll(".hit-banner").forEach(el => { if (!dueKeys.has(el.dataset.id)) el.remove(); });
+    const onScreen = new Set([...box.querySelectorAll(".hit-banner")].map(el => el.dataset.id));
+    due.forEach(it => {
+        if (!onScreen.has(it.key)) box.insertAdjacentHTML("beforeend", bannerHtml(it, HIT_SHOW_MS - (seenMs[it.key] || 0)));
+    });
+}
+
+// Count down every 250ms, but only while the tab is actually visible.
+const TICK_MS = 250;
+setInterval(() => {
+    if (document.hidden) return;
+    const box = $("hit-banners"), els = box.querySelectorAll(".hit-banner:not(.leaving)");
+    if (!els.length) return;
+    const seenMs = readJSON(SEEN_KEY, {});
+    els.forEach(el => {
+        const id = el.dataset.id;
+        seenMs[id] = (seenMs[id] || 0) + TICK_MS;
+        const left = HIT_SHOW_MS - seenMs[id];
+        const bar = el.querySelector(".hit-timer i");
+        if (bar) bar.style.width = Math.max(0, left / HIT_SHOW_MS * 100) + "%";
+        if (left <= 0) {                                  // fully shown: clear it and don't show it again
+            markFinished(id);
+            el.classList.add("leaving");
+            setTimeout(() => el.remove(), 450);
+        }
+    });
+    const keep = {};                                      // keep the saved timers tidy
+    Object.keys(seenMs).slice(-200).forEach(k => { keep[k] = seenMs[k]; });
+    writeJSON(SEEN_KEY, keep);
+}, TICK_MS);
+
 $("hit-banners").addEventListener("click", e => {
     const id = e.target.dataset.dismiss;
     if (!id) return;
-    try { localStorage.setItem(DISMISS_KEY, JSON.stringify([...dismissedHits(), id].slice(-100))); } catch {}
+    markFinished(id);
     renderBanners();
 });
 
@@ -286,3 +352,17 @@ renderBets();
 liveTick();
 updateClock();
 setInterval(updateClock, 1000);
+
+/* ---------- QR code to the Place Bet page ---------- */
+(function drawQr() {
+    const box = $("qr-code");
+    if (!box || typeof qrcode === "undefined") return;
+    try {
+        const url = new URL("bet.html", location.href).href;      // follows the site's address, even if it moves
+        const qr = qrcode(0, "M");                               // size picked automatically, medium error correction
+        qr.addData(url);
+        qr.make();
+        box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+        $("qr").title = url;
+    } catch (e) { console.error("qr", e); $("qr").hidden = true; }
+})();

@@ -511,3 +511,40 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
 .fb-status.doing{background:rgba(245,185,66,.16);color:var(--gold)}
 .fb-status.done{background:rgba(52,211,153,.16);color:var(--green)}
 .fb-status.no{background:rgba(139,151,173,.16);color:var(--muted)}
+
+/* ---------- Banner countdown + leaving ---------- */
+.hit-banner{position:relative;overflow:hidden;transition:opacity .4s ease,transform .4s ease,max-height .4s ease}
+.hit-banner.leaving{opacity:0;transform:translateY(-12px) scale(.98);pointer-events:none}
+.hit-timer{position:absolute;left:0;right:0;bottom:0;height:5px;background:rgba(4,19,12,.18)}
+.hit-timer i{display:block;height:100%;background:rgba(4,19,12,.55);transition:width .25s linear}
+
+/* ---------- Lost-bet banner (red) ---------- */
+.hit-tag.lost{background:#ef4444;color:#fff}
+.hit-banner.loss{
+    background:linear-gradient(135deg,#991b1b,#dc2626 55%,#ef4444);
+    color:#fff;
+    box-shadow:0 0 0 3px rgba(239,68,68,.35),0 10px 40px rgba(220,38,38,.45);
+    animation:bannerIn .5s cubic-bezier(.2,1.4,.4,1) both,lossGlow 2.2s ease-in-out infinite .5s;
+}
+.hit-banner.loss .hit-close{background:rgba(255,255,255,.18);color:#fff}
+.hit-banner.loss .hit-close:hover{background:rgba(255,255,255,.32)}
+.hit-banner.loss .hit-timer{background:rgba(255,255,255,.2)}
+.hit-banner.loss .hit-timer i{background:rgba(255,255,255,.75)}
+.hit-roast{font-size:clamp(15px,2.2vw,20px);font-weight:600;font-style:italic;margin-top:8px;line-height:1.35;opacity:.95}
+.hit-legs li.x{font-weight:700;opacity:1}
+.hit-banner{padding-bottom:28px}
+@keyframes lossGlow{0%,100%{box-shadow:0 0 0 3px rgba(239,68,68,.35),0 10px 40px rgba(220,38,38,.35)}50%{box-shadow:0 0 0 6px rgba(239,68,68,.5),0 10px 60px rgba(220,38,38,.7)}}
+
+/* ---------- Top-right group: clock + QR code ---------- */
+.topright{display:flex;align-items:center;gap:16px}
+.qr{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;line-height:1.35;text-align:right}
+.qr:hover .qr-code{box-shadow:0 0 0 3px var(--accent)}
+.qr-code{display:block;width:84px;height:84px;background:#fff;border-radius:10px;padding:7px;transition:box-shadow .2s;flex:none}
+.qr-code svg{display:block;width:100%;height:100%}
+.qr-label{order:-1;max-width:70px}
+@media (max-width:860px){
+    .topright{justify-content:center;width:100%}
+}
+@media (max-width:560px){
+    .qr{display:none}      /* people on a phone are already here */
+}

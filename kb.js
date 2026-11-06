@@ -50,6 +50,7 @@ window.renderKB = function () {
             <p class="hint">If a feed fails, the page keeps showing the last good data and retries on the next cycle.</p>`],
 
         ["Sportsbook odds (The Odds API)", `
+            ${Odds.enabled ? "" : `<p><b>Currently turned off.</b> The odds sections are hidden on every page and nothing is pulled from the odds service. To turn it back on, set <code>ODDS_ENABLED</code> to <code>true</code> in <code>config.js</code> and in the Apps Script (then publish a new script version). The notes below describe how it works when it is on.</p>`}
             <p>Lines from DraftKings, FanDuel, BetMGM, Caesars and other books come from <b>The Odds API</b> (the-odds-api.com). The site never talks to it directly. The Google Apps Script holds the API key privately in <i>Script Properties</i> as <code>ODDS_API_KEY</code>, fetches the odds, and saves them.</p>
             <p>The free plan allows about <b>500 requests a month</b>, so odds are pulled <b>once per game day</b>, not on demand:</p>
             <ol class="kb-list">
@@ -83,7 +84,6 @@ window.renderKB = function () {
                 <tr><td>Moneyline</td><td>League, game ID, team ID, opponent ID</td></tr>
                 <tr><td>Total</td><td>League, game ID, home and away IDs, over/under, line</td></tr>
                 <tr><td>Player prop (NFL only)</td><td>League, game ID, ESPN player ID, stat, over/under, line. Not offered for college football because it isn't legal in this state</td></tr>
-                <tr><td>Custom</td><td>Plain text only. Never graded automatically</td></tr>
             </tbody></table>
             <p>A <b>parlay</b> is one bet with several legs and one stake and odds. It loses as soon as any leg loses and wins only when every leg wins. Insights uses this to show which legs killed parlays.</p>`],
 
@@ -191,7 +191,8 @@ window.renderKB = function () {
                 }
             } catch (e) { rows.push(`${l.label} FAILED (${e.message})`); }
         }
-        try {
+        if (!Odds.enabled) rows.push("Sportsbook odds: turned off");
+        else try {
             const s = await Odds.status();
             rows.push(`Sportsbook odds OK (${s.remaining ?? "?"} credits left this month${s.used != null ? ", " + s.used + " used" : ""})`);
         } catch (e) {
