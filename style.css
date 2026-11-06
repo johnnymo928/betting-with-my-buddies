@@ -388,3 +388,50 @@ legend{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px}
     .profile-row .muted{display:none}
     .nav{order:3;width:100%;justify-content:center;overflow-x:auto}
 }
+
+/* ---------- Dropdown leg builder + live progress ---------- */
+.leg-row{display:flex;gap:8px;align-items:flex-start;background:#0d1421;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.leg-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:10px;min-width:0}
+.kind-fields{grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.leg-grid select,.leg-grid input{background:var(--panel-2)}
+.leg-grid label[hidden]{display:none}
+.leg-row .rm{flex:none}
+.leg-row .rm[hidden]{display:none}
+select{appearance:auto;cursor:pointer}
+optgroup{color:var(--muted);font-style:normal}
+
+.prog{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px;margin-top:3px;font-weight:500;color:var(--text);text-decoration:none}
+.prog.muted{color:var(--muted)}
+.prog.ahead{color:var(--green)}
+.prog.behind{color:var(--red)}
+.prog.warn{color:var(--gold);flex-basis:100%}
+.prog-bar{flex-basis:100%;height:5px;border-radius:99px;background:var(--line);overflow:hidden}
+.prog-bar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .4s}
+.live-tag{background:rgba(52,211,153,.16);color:var(--green);font-size:10px;letter-spacing:.08em;padding:1px 6px;border-radius:4px;font-weight:800}
+.leg.lost .prog{text-decoration:none}
+
+@media (max-width:560px){
+    .leg-grid,.kind-fields{grid-template-columns:1fr}
+}
+
+/* ---------- Private stake ---------- */
+.check{display:flex;align-items:flex-start;gap:10px;font-size:14px;font-weight:500;color:var(--text);cursor:pointer}
+.check input{width:18px;height:18px;margin-top:2px;accent-color:var(--accent);flex:none}
+.check small{color:var(--muted);font-weight:400}
+.status-word{font-weight:700}
+.status-word.won{color:var(--green)}
+.status-word.lost{color:var(--red)}
+.status-word.pending{color:var(--muted);font-weight:500}
+
+/* ---------- Knowledge base ---------- */
+.kb-item{border:1px solid var(--line);border-radius:12px;background:var(--panel-2);margin-bottom:8px}
+.kb-item summary,.kb-sub summary{cursor:pointer;padding:13px 14px;font-weight:700;font-size:15px;list-style:none}
+.kb-item summary::-webkit-details-marker,.kb-sub summary::-webkit-details-marker{display:none}
+.kb-item summary::before,.kb-sub summary::before{content:"\25B8";display:inline-block;width:18px;color:var(--accent);transition:transform .15s}
+.kb-item[open]>summary::before,.kb-sub[open]>summary::before{transform:rotate(90deg)}
+.kb-body{padding:0 14px 14px;display:grid;gap:10px;font-size:14px;line-height:1.55}
+.kb-body code,.hint code{background:#0d1421;border:1px solid var(--line);padding:1px 6px;border-radius:5px;font-size:12px;overflow-wrap:anywhere}
+.kb-list{padding-left:20px;display:grid;gap:6px}
+.kb-sub{border-top:1px dashed var(--line)}
+.kb-sub summary{font-size:13px;color:var(--muted);padding:10px 0}
+.kb-body .table td,.kb-body .table th{vertical-align:top}

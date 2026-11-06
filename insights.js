@@ -8,8 +8,11 @@ function stats(bets) {
     const settled = bets.filter(b => betStatus(b) !== "pending");
     const won = settled.filter(b => betStatus(b) === "won");
     const lost = settled.filter(b => betStatus(b) === "lost");
-    const staked = settled.reduce((s, b) => s + b.stake, 0);
-    const profit = settled.reduce((s, b) => s + betProfit(b), 0);
+    // Private bets count in records and hit rates but never in dollar figures.
+    const open = settled.filter(b => !b.private);
+    const hiddenSettled = settled.length - open.length;
+    const staked = open.reduce((s, b) => s + b.stake, 0);
+    const profit = open.reduce((s, b) => s + betProfit(b), 0);
 
     const parlays = bets.filter(b => b.type === "parlay");
     const parlaysSettled = parlays.filter(b => betStatus(b) !== "pending");
@@ -26,8 +29,9 @@ function stats(bets) {
         streak++;
     }
 
-    const bestWin = won.reduce((m, b) => Math.max(m, betProfit(b)), 0);
+    const bestWin = won.filter(b => !b.private).reduce((m, b) => Math.max(m, betProfit(b)), 0);
     return {
+        hiddenSettled,
         total: bets.length, pending: bets.length - settled.length,
         won: won.length, lost: lost.length, staked, profit,
         roi: staked ? profit / staked * 100 : null,
@@ -55,7 +59,7 @@ function render() {
     $("tiles").innerHTML = all.length ? [
         ["Bets", s.total, s.pending ? `${s.pending} pending` : "all settled"],
         ["Record", `${s.won}-${s.lost}`, `${pct(s.won, s.won + s.lost)} win rate`],
-        ["Profit", money(s.profit), "", sgn(s.profit)],
+        ["Profit", money(s.profit), s.hiddenSettled ? `excludes ${s.hiddenSettled} private` : "", sgn(s.profit)],
         ["ROI", s.roi === null ? "–" : s.roi.toFixed(1) + "%", `on ${money(s.staked)} staked`, s.roi === null ? "" : sgn(s.roi)],
         ["Streak", s.streak ? `${s.streak}${s.streakType === "won" ? "W" : "L"}` : "–", "current", s.streakType === "won" ? "pos" : s.streakType === "lost" ? "neg" : ""],
         ["Best Win", s.bestWin ? money(s.bestWin) : "–", "single bet", s.bestWin ? "pos" : ""]
@@ -95,6 +99,20 @@ function render() {
         ? `<div class="strip">${last.map(b => `<span class="dot ${betStatus(b)}" title="${esc(b.legs.map(l => l.text).join(" + "))}">${betStatus(b) === "won" ? "W" : "L"}</span>`).join("")}</div>`
         : `<div class="empty">Nothing settled yet.</div>`;
     $("notes").innerHTML = notes(mine, s).map(n => `<p>${n}</p>`).join("");
+
+    /* Hit rate by bet type: every settled leg, grouped by spread / ML / total / each prop stat */
+    const KIND = { spread: "Spread", ml: "Moneyline", total: "Game total" };
+    const groups = {};
+    mine.flatMap(b => b.legs).filter(l => l.status !== "pending").forEach(l => {
+        const k = !l.pick ? "Custom" : l.pick.kind === "prop" ? "Prop: " + l.pick.statLabel : KIND[l.pick.kind];
+        const g = groups[k] ||= { hit: 0, n: 0 };
+        g.n++; if (l.status === "won") g.hit++;
+    });
+    const trows = Object.entries(groups).sort((a, b) => b[1].n - a[1].n);
+    $("types").innerHTML = trows.length ? `
+        <thead><tr><th>Type</th><th>Legs</th><th>Hit</th><th>Hit %</th></tr></thead>
+        <tbody>${trows.map(([k, g]) => `<tr><td>${esc(k)}</td><td>${g.n}</td><td>${g.hit}</td><td>${pct(g.hit, g.n)}</td></tr>`).join("")}</tbody>`
+        : `<tbody><tr><td class="muted">Nothing settled yet.</td></tr></tbody>`;
 
     /* Killers: lost parlays and which leg(s) failed */
     const dead = mine.filter(b => b.type === "parlay" && betStatus(b) === "lost")

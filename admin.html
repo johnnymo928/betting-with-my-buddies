@@ -64,12 +64,24 @@
             <div class="panel-head"><h2><span class="tag tag-gold">BETS</span> Remove Bets</h2></div>
             <div id="admin-bets" class="bet-list"></div>
         </section>
+
+        <section class="panel" id="kb-panel">
+            <div class="panel-head">
+                <h2><span class="tag tag-alt">KB</span> Knowledge Base: How Data Is Pulled In</h2>
+                <button class="btn ghost" id="kb-test" type="button">Test ESPN connection</button>
+            </div>
+            <p class="hint">Everything the site shows comes from three places: ESPN's public feeds, what people enter, and this browser's storage. Expand a topic below.</p>
+            <p class="hint" id="kb-test-result" role="status"></p>
+            <div id="kb"></div>
+        </section>
     </div>
 </main>
 
 <script src="store.js"></script>
+<script src="live.js"></script>
 <script src="ui.js"></script>
 <script src="nav.js"></script>
 <script src="admin.js"></script>
+<script src="kb.js"></script>
 </body>
 </html>

@@ -50,6 +50,11 @@
                 </label>
             </div>
 
+            <label class="check">
+                <input type="checkbox" id="private">
+                <span>Keep my stake private <small>(hides the amount, payout and profit from everyone)</small></span>
+            </label>
+
             <p class="hint" id="payout-preview"></p>
             <p class="form-error" id="form-error" role="alert"></p>
             <button class="btn primary" type="submit">Place Bet</button>
@@ -62,11 +67,13 @@
             <select id="filter" aria-label="Filter by profile"></select>
         </div>
         <p class="hint">Mark each leg as hit (&#10003;), missed (&#10007;), or reset it. A parlay loses the moment any leg misses.</p>
+        <p class="hint exposure" id="exposure"></p>
         <div id="bet-list" class="bet-list"></div>
     </section>
 </main>
 
 <script src="store.js"></script>
+<script src="live.js"></script>
 <script src="ui.js"></script>
 <script src="nav.js"></script>
 <script src="bet.js"></script>

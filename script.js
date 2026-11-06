@@ -155,10 +155,18 @@ function renderBets() {
     $("bets").innerHTML = shown.length
         ? shown.map(b => UI.betCard(b)).join("")
         : `<div class="empty">No active bets. <a class="link" href="bet.html">Place one</a>.</div>`;
-    const pending = shown.filter(b => Store.betStatus(b) === "pending").length;
-    $("bets-count").textContent = shown.length ? `${pending} pending` : "";
+    const x = Store.exposure(shown);
+    $("bets-count").textContent = x.count
+        ? `${x.count} pending` + (x.count > x.hidden ? ` · ${Store.money(x.atRisk)} at risk · ${Store.money(x.toWin)} to win` : "") +
+          (x.hidden ? ` · ${x.hidden} private` : "") : "";
 }
 window.addEventListener("storage", () => { Store.reload(); renderBets(); });
+
+// Grade any pending picks against live box scores, then redraw.
+async function liveTick() {
+    try { if (await Live.refresh()) renderBets(); } catch (e) { console.error(e); }
+}
+setInterval(liveTick, 45000);
 
 /* ---------- Clock ---------- */
 function updateClock() {
@@ -188,5 +196,6 @@ for (const key of Object.keys(FEEDS)) {
 }
 
 renderBets();
+liveTick();
 updateClock();
 setInterval(updateClock, 1000);

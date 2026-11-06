@@ -58,22 +58,30 @@ const Store = (() => {
        A parlay loses as soon as one leg loses, wins when every leg wins. */
     const bets = () => db.bets.slice().sort((a, b) => b.createdAt - a.createdAt);
 
-    function addBet({ profileId, type, stake, odds, legs }) {
+    function addBet({ profileId, type, stake, odds, legs, privateAmount }) {
         if (!profile(profileId)) throw new Error("Pick a profile.");
-        const clean = legs.map(t => String(t).trim()).filter(Boolean);
+        // a leg is a plain string (custom) or { text, pick } built from the dropdowns
+        const clean = legs.map(l => typeof l === "string" ? { text: l.trim() } : { text: String(l.text).trim(), pick: l.pick })
+            .filter(l => l.text);
         if (type === "parlay" && clean.length < 2) throw new Error("A parlay needs at least 2 legs.");
         if (type === "single" && clean.length < 1) throw new Error("Describe your bet.");
         if (!(stake > 0)) throw new Error("Enter a stake above 0.");
         if (!Number.isFinite(odds) || Math.abs(odds) < 100) throw new Error("Odds must be American, like -110 or +250.");
         const bet = {
-            id: uid(), profileId, createdAt: Date.now(), type, stake, odds,
-            legs: (type === "single" ? clean.slice(0, 1) : clean).map(text => ({ id: uid(), text, status: "pending" }))
+            id: uid(), profileId, createdAt: Date.now(), type, stake, odds, private: !!privateAmount,
+            legs: (type === "single" ? clean.slice(0, 1) : clean).map(l => ({ id: uid(), text: l.text, status: "pending", ...(l.pick ? { pick: l.pick } : {}) }))
         };
         db.bets.push(bet); save(); return bet;
     }
-    function setLegStatus(betId, legId, status) {
+    // Manual changes lock a leg so live grading never overrides them;
+    // resetting to pending hands it back to auto-grading.
+    function setLegStatus(betId, legId, status, opts = {}) {
         const leg = db.bets.find(b => b.id === betId)?.legs.find(l => l.id === legId);
-        if (leg) { leg.status = status; save(); }
+        if (!leg) return;
+        leg.status = status;
+        if (opts.auto) { leg.manual = false; leg.actual = opts.actual; }
+        else { leg.manual = status !== "pending"; delete leg.actual; }
+        save();
     }
     function deleteBet(id) { db.bets = db.bets.filter(b => b.id !== id); save(); }
 
@@ -87,14 +95,24 @@ const Store = (() => {
         const s = betStatus(bet);
         return s === "won" ? bet.stake * multiplier(bet.odds) : s === "lost" ? -bet.stake : 0;
     };
+    // Money still on the line: stake at risk and what it would pay if everything hits.
+    // Private bets count toward `count` but never add to the dollar totals.
+    const exposure = list => list.filter(b => betStatus(b) === "pending").reduce(
+        (a, b) => b.private
+            ? { ...a, count: a.count + 1, hidden: a.hidden + 1 }
+            : { ...a, atRisk: a.atRisk + b.stake, toWin: a.toWin + b.stake * multiplier(b.odds), count: a.count + 1 },
+        { atRisk: 0, toWin: 0, count: 0, hidden: 0 });
     const fmtOdds = o => (o > 0 ? "+" : "") + o;
     const money = n => (n < 0 ? "-$" : "$") + Math.abs(n).toFixed(2);
 
     /* ---------- Admin PIN (light protection only: the site is public) ---------- */
     const hash = s => { let h = 5381; for (const c of s) h = ((h << 5) + h + c.charCodeAt(0)) | 0; return String(h); };
-    const hasPin = () => !!db.pinHash;
+    // Default PIN until an admin changes it on the Admin page. It is in the source
+    // on purpose, so anyone can read it from the public repo.
+    const DEFAULT_PIN = "0827";
+    const hasPin = () => true;
     const setPin = pin => { db.pinHash = hash(pin); save(); };
-    const checkPin = pin => db.pinHash === hash(pin);
+    const checkPin = pin => (db.pinHash || hash(DEFAULT_PIN)) === hash(pin);
 
     /* ---------- Backup ---------- */
     const exportData = () => JSON.stringify(db, null, 2);
@@ -107,7 +125,7 @@ const Store = (() => {
 
     return {
         COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
-        bets, addBet, setLegStatus, deleteBet, betStatus, betProfit, multiplier, fmtOdds, money,
+        bets, addBet, setLegStatus, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
         hasPin, setPin, checkPin, exportData, importData,
         reload() { db = Object.assign({ profiles: [], bets: [], pinHash: null }, load()); }
     };

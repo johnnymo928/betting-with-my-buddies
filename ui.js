@@ -9,10 +9,28 @@ const UI = (() => {
         const hit = bet.legs.filter(l => l.status === "won").length;
         const payout = bet.stake * multiplier(bet.odds);
 
+        // live progress / auto-grade note for structured legs
+        const progress = l => {
+            if (!l.pick) return "";
+            if (l.status !== "pending") {
+                const shown = l.actual != null && ["prop", "total"].includes(l.pick.kind) ? `Final: ${l.actual}` : "";
+                return l.manual === false ? `<span class="prog muted">Auto-graded${shown ? " · " + esc(shown) : ""}</span>` : "";
+            }
+            const pr = typeof Live !== "undefined" ? Live.progress[l.id] : null;
+            if (!pr || pr.state === "pre" || !pr.text)
+                return `<span class="prog muted">${pr?.state === "in" ? "Live" : "Waiting for game"}</span>`;
+            const live = pr.state === "in" ? `<b class="live-tag">LIVE</b> ` : "";
+            return `<span class="prog ${pr.cover === false ? "behind" : pr.cover ? "ahead" : ""}">
+                ${live}${esc(pr.text)} ${pr.detail ? `<span class="muted">· ${esc(pr.detail)}</span>` : ""}
+                ${pr.ratio != null ? `<span class="prog-bar"><i style="width:${Math.round(pr.ratio * 100)}%"></i></span>` : ""}
+                ${pr.note ? `<span class="prog warn">${esc(pr.note)}</span>` : ""}
+            </span>`;
+        };
+
         const legs = bet.legs.map(l => `
             <li class="leg ${l.status}">
                 <span class="leg-icon">${ICON[l.status]}</span>
-                <span class="leg-text">${esc(l.text)}</span>
+                <span class="leg-text">${esc(l.text)}${progress(l)}</span>
                 ${editable ? `
                 <span class="leg-actions" role="group" aria-label="Mark result">
                     <button data-act="leg" data-bet="${bet.id}" data-leg="${l.id}" data-status="won" class="${l.status === "won" ? "on-won" : ""}" title="Hit">✓</button>
@@ -21,7 +39,8 @@ const UI = (() => {
                 </span>` : ""}
             </li>`).join("");
 
-        const result = status === "won" ? `<b class="pos">+${money(betProfit(bet))}</b>`
+        const result = bet.private ? `<span class="status-word ${status}">${status === "pending" ? "Stake hidden" : status === "won" ? "Won" : "Lost"}</span>`
+            : status === "won" ?`<b class="pos">+${money(betProfit(bet))}</b>`
             : status === "lost" ? `<b class="neg">${money(betProfit(bet))}</b>`
             : `<span>To win ${money(payout)}</span>`;
 
@@ -34,7 +53,7 @@ const UI = (() => {
             </header>
             <ul class="legs">${legs}</ul>
             <footer>
-                <span>${money(bet.stake)} @ ${fmtOdds(bet.odds)}</span>
+                <span>${bet.private ? "🔒 Private" : money(bet.stake)} @ ${fmtOdds(bet.odds)}</span>
                 ${bet.type === "parlay" && status === "pending" ? `<span>${hit}/${bet.legs.length} hit</span>` : ""}
                 ${result}
             </footer>
