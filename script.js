@@ -164,6 +164,45 @@ function lossItems() {
     });
 }
 
+/* The ticker is animated from script in plain pixels instead of percentage-based CSS. Safari (iPad)
+   resolved the percentages before the first full layout, so the first load ran slow or stuck until the
+   screen was rotated. Here the distance is measured, and the animation is re-measured whenever the
+   text, the fonts or the screen size change, keeping its place so it never jumps back to the start. */
+const TICKER_PX_PER_SEC = 165;               // the pace you chose (half of the original speed) on a full ticker
+let tickerAnim = null, tickerTimer = null, lastTickerW = 0;
+
+function restartTicker() {
+    const el = $("ticker-content"), track = el.parentElement;
+    const vw = track.clientWidth, w = el.scrollWidth;
+    if (!vw || !w || !el.animate || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let fraction = 0;                                   // keep the current place...
+    if (tickerAnim) {
+        const t = tickerAnim.effect.getComputedTiming();
+        // ...but not from the short "Loading scores" text: real text starts from its beginning
+        if (lastTickerW > 600) fraction = t.duration ? ((t.localTime || 0) % t.duration) / t.duration : 0;
+        tickerAnim.cancel();
+    }
+    lastTickerW = w;
+    const duration = (vw + w) / TICKER_PX_PER_SEC * 1000;
+    tickerAnim = el.animate(
+        [{ transform: `translate3d(${vw}px,0,0)` }, { transform: `translate3d(${-w}px,0,0)` }],
+        { duration, iterations: Infinity, easing: "linear" });
+    tickerAnim.currentTime = fraction * duration;
+}
+const scheduleTicker = () => { clearTimeout(tickerTimer); tickerTimer = setTimeout(restartTicker, 120); };
+
+(function watchTicker() {
+    const el = $("ticker-content"), track = el.parentElement;
+    if (typeof ResizeObserver !== "undefined") { const ro = new ResizeObserver(scheduleTicker); ro.observe(track); ro.observe(el); }
+    window.addEventListener("resize", scheduleTicker);
+    window.addEventListener("orientationchange", scheduleTicker);
+    window.addEventListener("load", scheduleTicker);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleTicker);
+    document.getElementById("ticker").addEventListener("mouseenter", () => tickerAnim && tickerAnim.pause());
+    document.getElementById("ticker").addEventListener("mouseleave", () => tickerAnim && tickerAnim.play());
+    scheduleTicker();
+})();
+
 let lastTicker = "";
 function updateTicker() {
     const items = [...hitItems(), ...lossItems()];
@@ -176,7 +215,7 @@ function updateTicker() {
     const html = items.length
         ? items.join('<span class="sep">&#9679;</span>')
         : "No games to show right now.";
-    if (html !== lastTicker) { lastTicker = html; $("ticker-content").innerHTML = html; }   // don't restart the scroll for nothing
+    if (html !== lastTicker) { lastTicker = html; $("ticker-content").innerHTML = html; scheduleTicker(); }   // re-measure; the place is kept
 }
 
 /* ---------- Big banner when a full bet hits (green) or is lost (red, with a roast) ----------
