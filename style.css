@@ -483,3 +483,14 @@ optgroup{color:var(--muted);font-style:normal}
 @keyframes bannerIn{from{opacity:0;transform:translateY(-24px) scale(.96)}to{opacity:1;transform:none}}
 @keyframes bannerGlow{0%,100%{box-shadow:0 0 0 3px rgba(52,211,153,.35),0 10px 40px rgba(16,185,129,.35)}50%{box-shadow:0 0 0 6px rgba(52,211,153,.5),0 10px 60px rgba(16,185,129,.7)}}
 @media (max-width:560px){.hit-banner{padding:16px;gap:12px}}
+
+/* Today's Bets on Home: cards fade in only when the page flips, never for a data refresh */
+#bets:not(.flip) .bet-card{animation:none}
+
+/* ---------- Removed bets (admin) ---------- */
+.subhead{font-family:"Barlow Condensed",sans-serif;font-size:18px;letter-spacing:.04em;text-transform:uppercase;margin:22px 0 10px}
+.admin-bet.removed .bet-card{opacity:.6}
+.admin-bet.removed .row-btns{align-items:center}
+
+/* An element marked hidden must stay hidden, even where a rule sets display (the locked admin area) */
+[hidden]{display:none !important}

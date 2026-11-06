@@ -52,18 +52,24 @@ window.renderKB = function () {
         ["Sportsbook odds (The Odds API)", `
             <p>Lines from DraftKings, FanDuel, BetMGM, Caesars and other books come from <b>The Odds API</b> (the-odds-api.com). The site never talks to it directly. It asks the Google Apps Script, which holds the API key privately in <i>Script Properties</i> as <code>ODDS_API_KEY</code>, fetches the odds, and caches them.</p>
             <table class="table"><thead><tr><th>Request</th><th>Credits used</th><th>Cached</th></tr></thead><tbody>
-                <tr><td>Game lines for a league (spread, moneyline, total)</td><td>3</td><td>15 minutes in the script, 5 minutes in the browser</td></tr>
-                <tr><td>One player-prop market for one game</td><td>1</td><td>15 minutes</td></tr>
+                <tr><td>Game lines for a league (spread, moneyline, total)</td><td>3</td><td>6 hours in the script, 5 minutes in the browser</td></tr>
+                <tr><td>One player-prop market for one game</td><td>1</td><td>6 hours</td></tr>
                 <tr><td>Status check (the button above)</td><td>0</td><td>Not cached</td></tr>
             </tbody></table>
-            <p>Lines are only fetched when someone builds a bet, never in the background, so the free plan's monthly credits last. Use the test button above to see how many credits are left.</p>
+            <p>The free plan allows about <b>500 requests a month</b>, so lines are rationed three ways. Use the test button above to see how many credits are left.</p>
+            <ol class="kb-list">
+                <li><b>One day before kickoff.</b> The Place Bet form only loads sportsbook lines for a game in the 24 hours before it starts. Earlier than that it says when lines will open. Games already under way or finished load none.</li>
+                <li><b>Only when someone builds a bet.</b> Nothing is fetched in the background.</li>
+                <li><b>Cached for 6 hours.</b> Everyone shares the same saved copy, so a lines request costs credits at most about 4 times a day per league however many people look.</li>
+            </ol>
+            <p>As a safety net, the script stops asking the odds service when fewer than 40 credits remain, and the form then says lines are paused.</p>
             <ul class="kb-list">
                 <li><b>Where it shows:</b> a "Lines by sportsbook" panel appears inside each leg of the Place Bet form. <b>Use</b> fills in the line and the odds and sets the sportsbook. For a parlay, once every leg has a price the total odds are worked out for you.</li>
                 <li><b>Which books:</b> the list is <code>BOOKS</code> in <code>config.js</code> and <code>BOOK_KEYS</code> in the Apps Script. Change both together, then publish a new script version.</li>
                 <li><b>Matching games:</b> ESPN games are matched to The Odds API by team name. A game with no match shows "No sportsbook lines for this game yet".</li>
                 <li><b>Prop coverage:</b> not every stat has sportsbook lines. Pass+Rush yards, rush TDs, sacks and tackles have none, and the panel says so.</li>
                 <li><b>Changing the key:</b> Apps Script &rsaquo; Project Settings &rsaquo; Script Properties &rsaquo; <code>ODDS_API_KEY</code>. The key is never stored on the website.</li>
-                <li><b>Odds move:</b> prices are a snapshot, so confirm in the app before placing the bet.</li>
+                <li><b>Odds move:</b> prices can be up to 6 hours old, so confirm in the app before placing the bet.</li>
             </ul>
             <p>ESPN still provides one book's spread and total (<b>DraftKings</b>). It prefills the spread and total fields as soon as a game is picked, before the sportsbook panel loads.</p>
             <p><b>Risk and gain</b> are calculated locally: <i>to win = stake x (odds/100)</i> for positive American odds, or <i>stake x (100/|odds|)</i> for negative odds. A parlay uses the combined odds the bettor enters.</p>`],
@@ -103,7 +109,8 @@ window.renderKB = function () {
                 <tr><td>Saving</td><td>Every new bet, profile, grade or delete is sent to the sheet through a Google Apps Script web app (URL and password in <code>config.js</code>). It retries up to 3 times if the sheet doesn't answer.</td></tr>
                 <tr><td>Loading</td><td>When a page opens, then every 30 seconds and whenever the tab comes back into view, the page downloads everything from the sheet and refreshes what you see.</td></tr>
                 <tr><td>First connection</td><td>If the sheet is empty, whatever is already saved in this browser is uploaded to it once.</td></tr>
-                <tr><td>Deletes</td><td>Something deleted on one device disappears from the others at their next refresh. Deleting a profile deletes its bets.</td></tr>
+                <tr><td>Removing bets</td><td>Removing a bet on the Admin page is a <b>soft delete</b>: the bet is flagged <code>deleted</code>, disappears from every page and from the stats, and stays in the sheet (Status shows "deleted"). Admins can restore it, or delete it forever, from "Removed bets". Deleting a profile still permanently deletes its bets.</td></tr>
+                <tr><td>Going offline</td><td>Every change is saved in a queue on the device first, then sent. If the connection drops (or the sheet can't be reached), changes made offline stay in the queue, even if the page is closed and reopened, and are sent as soon as the connection returns (the browser's "online" signal, a tab coming back into view, or the next 30-second check). A refresh never overwrites changes that are still waiting to be sent. The badge in the nav bar shows how many are waiting. Admin actions that need the PIN must be done while online.</td></tr>
                 <tr><td>Conflicts</td><td>If two people change the same bet at the same moment, the last save wins.</td></tr>
             </tbody></table>
             <p>The badge in the nav bar shows the connection: <b>Shared &middot; synced</b>, <b>Connecting</b>, or <b>Offline &middot; retrying</b>. If the sheet can't be reached, the site keeps working from the local copy.</p>
@@ -112,7 +119,7 @@ window.renderKB = function () {
                 <li><b>Changing the script:</b> after editing it in Apps Script, use Deploy &rsaquo; Manage deployments &rsaquo; edit &rsaquo; New version. Saving alone does not update the live web app. A copy is kept in <code>sheet-setup/Code.gs</code>.</li>
                 <li><b>Local copy:</b> each browser also keeps a copy in localStorage under ${code("bwmb.v1")}. Clearing browser data is safe, since it reloads from the sheet.</li>
                 <li><b>Admin PIN:</b> preset to <b>0827</b> in the Apps Script (<code>DEFAULT_ADMIN_PIN</code>). The script checks it, not the website, and the page keeps it in memory only, so reloading or leaving the Admin page locks it again. 5 wrong tries lock it for 5 minutes. To keep the PIN out of the public repo, add a Script Property named <code>ADMIN_PIN</code>, which overrides the preset.</li>
-                <li><b>Admin-only changes:</b> deleting bets or profiles, creating or editing profiles, and restoring a backup are refused by the script unless the correct PIN is sent with them. Placing bets and marking legs hit or missed stay open to everyone.</li>
+                <li><b>Admin-only changes:</b> removing or restoring bets, deleting bets or profiles, creating or editing profiles, and restoring a backup are refused by the script unless the correct PIN is sent with them. Placing bets and marking legs hit or missed stay open to everyone.</li>
             </ul>`],
 
         ["Private stakes and the admin PIN", `
@@ -173,3 +180,5 @@ window.renderKB = function () {
         out.innerHTML = rows.map(esc).join("<br>");
     };
 };
+
+window.renderKB();   // the Knowledge Base is shown without the PIN

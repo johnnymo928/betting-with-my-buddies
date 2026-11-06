@@ -3,7 +3,7 @@ const { esc } = Store;
 
 /* The admin page is locked until the PIN is entered. The PIN is checked by the
    Apps Script (see sheet-setup/Code.gs) and kept in memory only, so reloading or
-   leaving the page locks it again. Nothing below is drawn until the check passes. */
+   leaving the page locks it again. The data panels below are not drawn until the check passes. The Knowledge Base is the only part that is always visible. */
 function showGate(msg) {
     $("tools").hidden = true; $("gate").hidden = false;
     $("gate-title").textContent = "Admin PIN";
@@ -13,7 +13,7 @@ function showGate(msg) {
 }
 function showTools() {
     $("gate").hidden = true; $("tools").hidden = false;
-    renderProfiles(); renderBets(); renderKB();
+    renderProfiles(); renderBets();
 }
 
 const ERRORS = {
@@ -81,12 +81,31 @@ $("profile-list").addEventListener("click", e => {
 function renderBets() {
     const list = Store.bets();
     $("admin-bets").innerHTML = list.length
-        ? list.map(b => `<div class="admin-bet">${UI.betCard(b)}<button class="btn danger" data-del="${b.id}">Remove</button></div>`).join("")
+        ? list.map(b => `<div class="admin-bet">${UI.betCard(b)}<button class="btn danger" data-remove="${b.id}">Remove bet</button></div>`).join("")
         : `<div class="empty">No bets yet.</div>`;
+
+    const gone = Store.removedBets();
+    $("removed-wrap").hidden = !gone.length;
+    $("removed-count").textContent = gone.length ? `(${gone.length})` : "";
+    $("removed-bets").innerHTML = gone.map(b => `
+        <div class="admin-bet removed">
+            ${UI.betCard(b)}
+            <div class="row-btns">
+                <button class="btn ghost" data-restore="${b.id}">Restore</button>
+                <button class="btn danger" data-purge="${b.id}">Delete forever</button>
+                <span class="muted">Removed ${b.deletedAt ? new Date(b.deletedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}</span>
+            </div>
+        </div>`).join("");
 }
 $("admin-bets").onclick = e => {
-    const id = e.target.dataset.del; if (!id) return;
-    if (confirm("Remove this bet?")) { Store.deleteBet(id); renderBets(); renderProfiles(); }
+    const id = e.target.dataset.remove; if (!id) return;
+    // soft delete: hidden from every page and from the stats, but it can be restored below
+    Store.removeBet(id); renderBets(); renderProfiles();
+};
+$("removed-bets").onclick = e => {
+    const { restore, purge } = e.target.dataset;
+    if (restore) { Store.restoreBet(restore); renderBets(); renderProfiles(); }
+    else if (purge && confirm("Delete this bet forever? This can't be undone.")) { Store.deleteBet(purge); renderBets(); }
 };
 
 /* ---------- Backup ---------- */

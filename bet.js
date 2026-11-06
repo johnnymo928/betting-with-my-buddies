@@ -139,6 +139,16 @@ function legRow() {
         if (!Odds.enabled || kind === "custom" || !st.game) { panel.hidden = true; return; }
         panel.hidden = false;
         const league = q(".f-league").value;
+
+        // The odds plan is limited, so lines are only fetched in the 24 hours before kickoff.
+        const g = st.game, kickoff = g.start ? new Date(g.start).getTime() : null;
+        if (g.state !== "pre") return showMsg("This game is under way or finished. Sportsbook lines load before kickoff only.");
+        if (kickoff === null) return showMsg("Kickoff time unknown, so sportsbook lines can't be loaded.");
+        if (kickoff - Date.now() > 24 * 3600 * 1000) {
+            const opens = new Date(kickoff - 24 * 3600 * 1000)
+                .toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+            return showMsg("Sportsbook lines load 1 day before kickoff (from " + opens + "), to save the monthly odds limit.");
+        }
         try {
             if (kind === "prop") {
                 const pid = q(".f-player")?.value;
@@ -163,7 +173,9 @@ function legRow() {
             }
         } catch (e) {
             console.error("odds", e);
-            if (my === token) showMsg("Sportsbook lines aren't available right now.");
+            if (my === token) showMsg(e.message === "credits_low"
+                ? "Sportsbook lines are paused to protect this month's free odds credits."
+                : "Sportsbook lines aren't available right now.");
         }
     }
 
@@ -211,7 +223,7 @@ function legRow() {
                     <td class="lt">${esc(r.text)}</td>
                     <td class="la">${r.uses.map(u => `<button type="button" class="btn ghost sm" data-use="${esc(JSON.stringify(u.d))}">${u.text}</button>`).join("")}</td>
                 </tr>`).join("")}</tbody></table>
-            <p class="lines-note muted">Lines refresh about every 15 minutes. Confirm in your app before betting.</p>`;
+            <p class="lines-note muted">Lines can be a few hours old. Confirm in your app before betting.</p>`;
     }
 
     panel.addEventListener("click", e => {

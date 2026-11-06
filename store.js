@@ -10,63 +10,94 @@ const Store = (() => {
         try { return JSON.parse(localStorage.getItem(KEY)) || {}; }
         catch { return {}; }
     };
-    let db = Object.assign({ profiles: [], bets: [], pinHash: null }, load());
+    let db = Object.assign({ profiles: [], bets: [], pinHash: null, outbox: [] }, load());
     const save = () => {
         try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { console.error(e); }
     };
 
     /* ---------- Google Sheet sync (see config.js) ----------
-       Every write is posted to the sheet; every page pulls the latest every 30s.
+       Every change goes into an outbox that is saved on this device, then sent to the sheet.
+       If the connection is down the outbox simply waits and is replayed when it is back
+       (on the browser's "online" event, when the tab is shown again, and every 30 seconds).
+       Pulling the latest data never overwrites a change that has not reached the sheet yet.
        The sheet is the source of truth. Records that exist only on this device
        (never uploaded) are uploaded instead of dropped. */
     const cfg = typeof SHEET_URL !== "undefined" && SHEET_URL ? { url: SHEET_URL, secret: SHEET_SECRET } : null;
-    let syncStatus = cfg ? "connecting" : "local", inFlight = 0, queue = Promise.resolve();
+    let syncStatus = cfg ? "connecting" : "local", flushing = false;
     const statusListeners = [];
     const setStatus = s => { syncStatus = s; statusListeners.forEach(f => f(s)); };
-    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const REFUSED = ["forbidden", "locked", "unauthorized", "bad_pin"];   // these will never succeed on retry
 
-    function post(body) {
-        inFlight++;
-        queue = queue.then(async () => {
-            try {
-                for (let attempt = 1; ; attempt++) {
+    const box = () => (db.outbox ||= []);
+    const pending = () => box().length;
+
+    // Queue a change. Entries hold only a reference; the record itself is read when it is sent,
+    // so the latest version always goes out and repeated edits collapse into one call.
+    function push(body) {
+        if (!cfg) return;
+        const e = body.action === "replaceAll" ? { a: "replaceAll" }
+            : { a: body.action, k: body.kind, id: body.action === "upsert" ? body.record.id : body.id };
+        const dup = box().some((x, i) => x.a === e.a && x.k === e.k && x.id === e.id && !(i === 0 && flushing));
+        if (!dup) { box().push(e); save(); }
+        flush();
+    }
+    const pushBet = id => push({ action: "upsert", kind: "bet", record: { id } });
+
+    function buildBody(e) {
+        if (e.a === "replaceAll") return { action: "replaceAll", profiles: db.profiles, bets: db.bets };
+        if (e.a === "remove") return { action: "remove", kind: e.k, id: e.id };
+        const record = (e.k === "profile" ? db.profiles : db.bets).find(r => r.id === e.id);
+        return record ? { action: "upsert", kind: e.k, record } : null;     // deleted locally since: nothing to send
+    }
+
+    async function send(body) {
+        const res = await fetch(cfg.url, {
+            method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ secret: cfg.secret, pin: adminPin, ...body }),
+            signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined
+        });
+        const j = await res.json();
+        if (j.error) throw new Error(j.error);
+    }
+
+    async function flush() {
+        if (!cfg || flushing) return;
+        flushing = true;
+        try {
+            while (box().length) {
+                const body = buildBody(box()[0]);
+                if (body) {
                     try {
-                        const res = await fetch(cfg.url, {
-                            method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
-                            body: JSON.stringify({ secret: cfg.secret, pin: adminPin, ...body })
-                        });
-                        const j = await res.json();
-                        if (j.error) throw new Error(j.error);
-                        break;
-                    } catch (e) {
-                        // a refusal won't change on retry; only network hiccups are retried
-                        if (attempt >= 3 || ["forbidden", "locked", "unauthorized", "bad_pin"].includes(e.message)) throw e;
-                        await wait(3000 * attempt);
+                        await send(body);
+                        // remember which records the sheet now has, so a remote delete is not undone
+                        const s = new Set(db.syncedIds || []);
+                        if (body.action === "upsert") s.add(body.record.id);
+                        if (body.action === "remove") s.delete(body.id);
+                        if (body.action === "replaceAll") { s.clear(); [...body.profiles, ...body.bets].forEach(r => s.add(r.id)); }
+                        db.syncedIds = [...s];
+                    } catch (err) {
+                        if (!REFUSED.includes(err.message)) {       // offline or a server hiccup: keep it all and retry later
+                            console.error("sync", err); setStatus("error"); return;
+                        }
+                        console.error("sync refused", err.message);   // refused for good: drop it, the next pull restores the truth
                     }
                 }
-                // remember which records the sheet now has, so a remote delete isn't undone
-                const s = new Set(db.syncedIds || []);
-                if (body.action === "upsert") s.add(body.record.id);
-                if (body.action === "remove") s.delete(body.id);
-                if (body.action === "replaceAll") { s.clear(); [...body.profiles, ...body.bets].forEach(r => s.add(r.id)); }
-                db.syncedIds = [...s]; save();
-                setStatus("synced");
-            } catch (e) { console.error("sync", e); setStatus("error"); }
-            finally { inFlight--; }
-        });
+                box().shift(); save();
+            }
+            setStatus("synced");
+        } finally { flushing = false; }
     }
-    const push = body => { if (cfg) post(body); };
-    const pushBet = id => { const b = db.bets.find(x => x.id === id); if (b) push({ action: "upsert", kind: "bet", record: b }); };
 
     async function pull() {
-        if (!cfg || inFlight) return;
+        if (!cfg || flushing) return;
+        if (pending()) { await flush(); if (pending()) return; }     // send our changes first, never overwrite them
         let remote;
         try {
             const res = await fetch(`${cfg.url}?secret=${encodeURIComponent(cfg.secret)}`);
             remote = await res.json();
             if (remote.error || !Array.isArray(remote.profiles)) throw new Error(remote.error || "bad response");
         } catch (e) { console.error("sync", e); setStatus("error"); return; }
-        if (inFlight) return;                        // a local write started while we were fetching
+        if (flushing || pending()) return;               // a local change started while we were fetching
 
         const before = JSON.stringify([db.profiles, db.bets]);
         const synced = new Set(db.syncedIds || []);
@@ -100,7 +131,7 @@ const Store = (() => {
             db.syncedIds = [...remote.profiles, ...remote.bets].map(r => r.id);
         }
         save();
-        if (!inFlight) setStatus("synced");
+        if (!pending() && !flushing) setStatus("synced");
         if (JSON.stringify([db.profiles, db.bets]) !== before) window.dispatchEvent(new Event("storage"));
     }
 
@@ -145,7 +176,10 @@ const Store = (() => {
                stake, odds (American), legs: [{ id, text, status }] }
        leg.status: "pending" | "won" | "lost"
        A parlay loses as soon as one leg loses, wins when every leg wins. */
-    const bets = () => db.bets.slice().sort((a, b) => b.createdAt - a.createdAt);
+    // Removed bets are soft-deleted: flagged, hidden everywhere, and recoverable by an admin.
+    const byNewest = (a, b) => b.createdAt - a.createdAt;
+    const bets = () => db.bets.filter(b => !b.deleted).sort(byNewest);
+    const removedBets = () => db.bets.filter(b => b.deleted).sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
 
     function addBet({ profileId, type, stake, odds, legs, privateAmount, book }) {
         if (!profile(profileId)) throw new Error("Pick a profile.");
@@ -178,7 +212,7 @@ const Store = (() => {
     // Hits settled within the last `windowMs`: individual legs, and whole bets that have fully hit.
     function recentHits(windowMs) {
         const cutoff = Date.now() - windowMs, legs = [], full = [];
-        db.bets.forEach(b => {
+        db.bets.filter(b => !b.deleted).forEach(b => {
             b.legs.forEach(l => {
                 if (l.status === "won" && l.settledAt && l.settledAt >= cutoff) legs.push({ bet: b, leg: l, at: l.settledAt });
             });
@@ -190,7 +224,17 @@ const Store = (() => {
         const newest = (a, b) => b.at - a.at;
         return { legs: legs.sort(newest), full: full.sort(newest) };
     }
-    function deleteBet(id) {
+    function removeBet(id) {                       // soft delete (admin)
+        const b = db.bets.find(x => x.id === id); if (!b) return;
+        b.deleted = true; b.deletedAt = Date.now();
+        save(); pushBet(id);
+    }
+    function restoreBet(id) {
+        const b = db.bets.find(x => x.id === id); if (!b) return;
+        delete b.deleted; delete b.deletedAt;
+        save(); pushBet(id);
+    }
+    function deleteBet(id) {                       // permanent (admin)
         db.bets = db.bets.filter(b => b.id !== id);
         save(); push({ action: "remove", kind: "bet", id });
     }
@@ -245,7 +289,7 @@ const Store = (() => {
     function importData(text) {
         const d = JSON.parse(text);
         if (!Array.isArray(d.profiles) || !Array.isArray(d.bets)) throw new Error("Not a valid backup file.");
-        db = { profiles: d.profiles, bets: d.bets, pinHash: db.pinHash || d.pinHash || null, syncedIds: db.syncedIds };
+        db = { profiles: d.profiles, bets: d.bets, pinHash: db.pinHash || d.pinHash || null, syncedIds: db.syncedIds, outbox: db.outbox || [] };
         save(); push({ action: "replaceAll", profiles: db.profiles, bets: db.bets });
     }
 
@@ -253,13 +297,16 @@ const Store = (() => {
         pull();
         setInterval(pull, 30000);
         document.addEventListener("visibilitychange", () => { if (!document.hidden) pull(); });
+        // the browser tells us when the connection comes back: send queued changes and refresh right away
+        window.addEventListener("online", () => pull());
+        window.addEventListener("offline", () => setStatus("error"));
     }
 
     return {
-        sync: { enabled: !!cfg, status: () => syncStatus, onStatus: f => statusListeners.push(f), pull },
+        sync: { enabled: !!cfg, status: () => syncStatus, pending, onStatus: f => statusListeners.push(f), pull },
         COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
-        bets, addBet, setLegStatus, recentHits, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
+        bets, removedBets, addBet, setLegStatus, recentHits, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
         adminLogin, adminLogout, isAdmin, exportData, importData,
-        reload() { db = Object.assign({ profiles: [], bets: [], pinHash: null }, load()); }
+        reload() { db = Object.assign({ profiles: [], bets: [], pinHash: null, outbox: [] }, load()); }
     };
 })();

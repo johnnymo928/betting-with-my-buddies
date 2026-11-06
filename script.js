@@ -1,10 +1,11 @@
 /* ============================================================
-   Betting With My Buddies
+   Betting with Buddies
    ============================================================ */
 
 /* ---------- Config ---------- */
 const PAGE_SIZE = 4;
 const ROTATE_MS = 7000;
+const BET_PAGE_SIZE = 4;
 const REFRESH_MS = 60000;
 
 const FEEDS = {
@@ -107,12 +108,13 @@ function renderLeague(key) {
         : "";
 }
 
-function startRotation(key) {
-    const s = state[key];
-    clearInterval(s.timer);
-    s.timer = setInterval(() => {
-        s.page++;
-        renderLeague(key);
+// One timer flips every panel (NFL, NCAAF, Today's Bets) at the same moment.
+let rotateTimer = null, betPage = 0;
+function startRotation() {
+    clearInterval(rotateTimer);
+    rotateTimer = setInterval(() => {
+        for (const key of Object.keys(FEEDS)) { state[key].page++; renderLeague(key); }
+        betPage++; renderBetList();
     }, ROTATE_MS);
 }
 
@@ -197,19 +199,54 @@ $("hit-banners").addEventListener("click", e => {
 
 /* ---------- Bets ---------- */
 // Home shows everything still pending, plus anything placed today.
-function renderBets() {
+let lastBetsHtml = "", lastBetPage = -1;
+function renderBetList() {
     const startOfDay = new Date().setHours(0, 0, 0, 0);
     const shown = Store.bets().filter(b => Store.betStatus(b) === "pending" || b.createdAt >= startOfDay);
-    $("bets").innerHTML = shown.length
-        ? shown.map(b => UI.betCard(b)).join("")
+
+    const pages = Math.max(1, Math.ceil(shown.length / BET_PAGE_SIZE));
+    if (betPage >= pages) betPage = 0;
+    const start = betPage * BET_PAGE_SIZE;
+
+    const html = shown.length
+        ? shown.slice(start, start + BET_PAGE_SIZE).map(b => UI.betCard(b)).join("")
         : `<div class="empty">No active bets. <a class="link" href="bet.html">Place one</a>.</div>`;
+    // Only touch the DOM when something changed, and only fade cards in when the page flips
+    // (not for a live-progress update), so a single page never flashes.
+    if (html !== lastBetsHtml) {
+        lastBetsHtml = html;
+        $("bets").classList.toggle("flip", betPage !== lastBetPage);
+        $("bets").innerHTML = html;
+    }
+    lastBetPage = betPage;
+
+    $("bets-dots").innerHTML = pages > 1
+        ? Array.from({ length: pages }, (_, i) =>
+            `<button class="${i === betPage ? "active" : ""}" data-page="${i}" aria-label="Bets page ${i + 1}"></button>`).join("")
+        : "";
+
     const x = Store.exposure(shown);
-    $("bets-count").textContent = x.count
+    const end = Math.min(start + BET_PAGE_SIZE, shown.length);
+    const range = pages > 1 ? (end === start + 1 ? `Bet ${end} of ${shown.length}` : `Bets ${start + 1}–${end} of ${shown.length}`) : "";
+    const money = x.count
         ? `${x.count} pending` + (x.count > x.hidden ? ` · ${Store.money(x.atRisk)} at risk · ${Store.money(x.toWin)} to win` : "") +
-          (x.hidden ? ` · ${x.hidden} private` : "") : "";
+          (x.hidden ? ` · ${x.hidden} private` : "")
+        : "";
+    $("bets-count").textContent = [range, money].filter(Boolean).join(" · ");
+}
+function renderBets() {
+    renderBetList();
     renderBanners();
     updateTicker();
 }
+// click a bets pager dot to jump to a page
+$("bets-dots").addEventListener("click", e => {
+    const p = e.target.dataset.page;
+    if (p === undefined) return;
+    betPage = Number(p);
+    renderBetList();
+    startRotation();
+});
 window.addEventListener("storage", () => { Store.reload(); renderBets(); });
 
 // Grade any pending picks against live box scores, then redraw.
@@ -229,9 +266,8 @@ function updateClock() {
 
 /* ---------- Boot ---------- */
 for (const key of Object.keys(FEEDS)) {
-    state[key] = { games: [], page: 0, timer: null, error: false, loaded: false };
+    state[key] = { games: [], page: 0, error: false, loaded: false };
     renderLeague(key);
-    startRotation(key);
     loadLeague(key);
     setInterval(() => loadLeague(key), REFRESH_MS);
 
@@ -241,9 +277,10 @@ for (const key of Object.keys(FEEDS)) {
         if (p === undefined) return;
         state[key].page = Number(p);
         renderLeague(key);
-        startRotation(key);   // restart the timer so it doesn't flip right away
+        startRotation();   // restart the shared timer so nothing flips right away
     });
 }
+startRotation();
 
 renderBets();
 liveTick();

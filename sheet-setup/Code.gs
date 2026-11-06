@@ -1,5 +1,5 @@
 /**
- * Betting With My Buddies: Google Sheet backend (temporary database)
+ * Betting with Buddies: Google Sheet backend (temporary database)
  *
  * Paste this into the sheet's Apps Script editor (Extensions > Apps Script),
  * change SECRET, then Deploy > New deployment > Web app:
@@ -81,6 +81,11 @@ function doPost(e) {
       const l = list(body.kind), i = l.findIndex(function (r) { return r.id === body.record.id; });
       // a device that can't see a private stake sends null: keep the stake we already have
       if (body.kind === "bet" && body.record.private && body.record.stake == null && i >= 0) body.record.stake = l[i].stake;
+      // removing or restoring a bet (soft delete) is admin-only; so is overwriting a removed bet
+      if (body.kind === "bet" && !!(i >= 0 && l[i].deleted) !== !!body.record.deleted) {
+        const r = pinCheck_(body.pin);
+        if (!r.ok) return json_({ error: r.locked ? "locked" : "forbidden" });
+      }
       if (i >= 0) l[i] = body.record; else l.push(body.record);
     } else if (body.action === "remove") {
       if (body.kind === "profile") {            // deleting a profile deletes its bets
@@ -137,7 +142,7 @@ function writeAll_(all) {
     rows.push(["profile", p.id, p.name, "", "", p.color, "", "", "", "", "", "", now, JSON.stringify(p)]);
   });
   all.bets.slice().sort(function (a, b) { return b.createdAt - a.createdAt; }).forEach(function (b) {
-    const s = statusOf_(b), win = b.stake * mult_(b.odds);
+    const s = b.deleted ? "deleted" : statusOf_(b), win = b.stake * mult_(b.odds);
     rows.push(["bet", b.id, names[b.profileId] || "Unknown", new Date(b.createdAt), b.type,
       b.legs.map(function (l) { return mark_(l.status) + l.text; }).join("\n"),
       b.stake, b.odds, win, s, s === "won" ? win : s === "lost" ? -b.stake : 0,
@@ -174,7 +179,8 @@ const ODDS_BASE = "https://api.the-odds-api.com/v4/";
 const ODDS_SPORTS = { nfl: "americanfootball_nfl", ncaaf: "americanfootball_ncaaf" };
 // Books to keep (Odds API keys). Keep in sync with BOOKS in the site's config.js.
 const BOOK_KEYS = ["draftkings", "fanduel", "betmgm", "williamhill_us", "espnbet", "fanatics", "hardrockbet", "betrivers"];
-const ODDS_TTL = 900;   // seconds to cache (15 minutes)
+const ODDS_TTL = 21600;           // seconds to cache results: 6 hours, the most CacheService allows
+const ODDS_MIN_CREDITS = 40;      // stop calling the odds service when fewer credits than this remain this month
 // Only these player-prop markets can be requested (stops arbitrary credit spending)
 const PROP_MARKET_ALLOW = [
   "player_pass_yds", "player_pass_tds", "player_pass_completions", "player_pass_attempts",
@@ -182,13 +188,17 @@ const PROP_MARKET_ALLOW = [
   "player_receptions", "player_rush_reception_yds", "player_anytime_td", "player_field_goals"
 ];
 
-function oddsFetch_(path, query) {
+function oddsFetch_(path, query, free) {
   const key = PropertiesService.getScriptProperties().getProperty("ODDS_API_KEY");
   if (!key) return { error: "no_key" };
+  // credit guard: the free plan is about 500 requests a month, so stop before it runs out
+  const known = CacheService.getScriptCache().get("odds:remaining");
+  if (!free && known !== null && Number(known) < ODDS_MIN_CREDITS) return { error: "credits_low", remaining: Number(known) };
   const res = UrlFetchApp.fetch(ODDS_BASE + path + "?apiKey=" + encodeURIComponent(key) + query, { muteHttpExceptions: true });
   const h = res.getHeaders(), code = res.getResponseCode();
   const rem = h["x-requests-remaining"] || h["X-Requests-Remaining"];
   const used = h["x-requests-used"] || h["X-Requests-Used"];
+  if (rem !== undefined) { try { CacheService.getScriptCache().put("odds:remaining", String(rem), 21600); } catch (e) {} }
   if (code !== 200) return { error: "odds_http_" + code, remaining: rem === undefined ? null : Number(rem) };
   return { data: JSON.parse(res.getContentText()), remaining: rem === undefined ? null : Number(rem), used: used === undefined ? null : Number(used) };
 }
@@ -203,7 +213,7 @@ function cached_(key, produce) {
 
 function oddsRoute_(p) {
   if (p.status) {                                        // free call: just reports remaining credits
-    const r = oddsFetch_("sports/", "");
+    const r = oddsFetch_("sports/", "", true);
     return json_(r.error ? { error: r.error } : { ok: true, remaining: r.remaining, used: r.used });
   }
   const sport = ODDS_SPORTS[p.league];
@@ -272,7 +282,12 @@ function pinCheck_(pin) {
   const fails = Number(cache.get("pinfails") || 0);
   if (fails >= 5) return { ok: false, locked: true };
   const real = PropertiesService.getScriptProperties().getProperty("ADMIN_PIN") || DEFAULT_ADMIN_PIN;
-  if (String(pin === undefined || pin === null ? "" : pin) === String(real)) return { ok: true };
-  cache.put("pinfails", String(fails + 1), 300);
+  if (String(pin === undefined || pin === null ? "" : pin) === String(real)) {
+    cache.remove("pinfails");
+    return { ok: true };
+  }
+  // Only a PIN that was actually entered and is wrong counts as a failed try. A request that
+  // carries no PIN at all (an old or stale browser tab) is refused without locking anyone out.
+  if (pin !== undefined && pin !== null && String(pin) !== "") cache.put("pinfails", String(fails + 1), 300);
   return { ok: false, locked: false };
 }

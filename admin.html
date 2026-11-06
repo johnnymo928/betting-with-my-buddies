@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin &middot; Betting With My Buddies</title>
+    <title>Admin &middot; Betting with Buddies</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
 <header class="topbar">
     <div class="brand">
         <span class="live-dot" aria-hidden="true"></span>
-        <div><h1>Betting With My Buddies</h1><p class="tagline">Admin</p></div>
+        <div><h1>Betting with Buddies</h1><p class="tagline">Admin</p></div>
     </div>
 </header>
 
@@ -58,19 +58,27 @@
 
         <section class="panel">
             <div class="panel-head"><h2><span class="tag tag-gold">BETS</span> Remove Bets</h2></div>
+            <p class="hint">Removing a bet hides it from every page and from the stats. It stays in the sheet and can be restored.</p>
             <div id="admin-bets" class="bet-list"></div>
+
+            <div id="removed-wrap" hidden>
+                <h3 class="subhead">Removed bets <span class="muted" id="removed-count"></span></h3>
+                <div id="removed-bets" class="bet-list"></div>
+            </div>
         </section>
 
-        <section class="panel" id="kb-panel">
-            <div class="panel-head">
-                <h2><span class="tag tag-alt">KB</span> Knowledge Base: How Data Is Pulled In</h2>
-                <button class="btn ghost" id="kb-test" type="button">Test ESPN connection</button>
-            </div>
-            <p class="hint">Everything the site shows comes from three places: ESPN's public feeds, what people enter, and this browser's storage. Expand a topic below.</p>
-            <p class="hint" id="kb-test-result" role="status"></p>
-            <div id="kb"></div>
-        </section>
     </div>
+
+    <!-- Knowledge Base: visible without the PIN (no personal data in it) -->
+    <section class="panel" id="kb-panel">
+        <div class="panel-head">
+            <h2><span class="tag tag-alt">KB</span> Knowledge Base: How Data Is Pulled In</h2>
+            <button class="btn ghost" id="kb-test" type="button">Test ESPN connection</button>
+        </div>
+        <p class="hint">Everything the site shows comes from four places: ESPN's public feeds, the sportsbook odds service, what people enter, and the shared Google Sheet. Anyone can read this section. Everything else on this page needs the PIN.</p>
+        <p class="hint" id="kb-test-result" role="status"></p>
+        <div id="kb"></div>
+    </section>
 </main>
 
 <script src="config.js"></script>

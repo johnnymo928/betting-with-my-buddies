@@ -62,7 +62,7 @@ const Live = (() => {
                     name: t.shortDisplayName || t.displayName, full: t.displayName
                 });
                 return {
-                    id: e.id, state: e.status.type.state, detail: e.status.type.shortDetail,
+                    id: e.id, state: e.status.type.state, detail: e.status.type.shortDetail, start: e.date || null,
                     label: `${tm(away).abbr} @ ${tm(home).abbr}`,
                     teams: [tm(away), tm(home)],
                     // ESPN's current line, used to prefill the form
