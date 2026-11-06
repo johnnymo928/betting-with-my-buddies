@@ -3,7 +3,7 @@
    The endpoint and stat tables are generated from live.js so they
    never go stale. Relies on `$` and `esc` from admin.js.
    ============================================================ */
-(function () {
+window.renderKB = function () {
     const BASE = "https://site.api.espn.com/apis/site/v2/sports/football/";
     const L = Live.LEAGUES;
     const code = s => `<code>${esc(s)}</code>`;
@@ -111,13 +111,14 @@
                 <li><b>The WebSite tab:</b> the script writes its own headers and rebuilds the tab after every change. The hidden JSON column is the real data. Don't type on that tab or edit the other columns, because edits are overwritten.</li>
                 <li><b>Changing the script:</b> after editing it in Apps Script, use Deploy &rsaquo; Manage deployments &rsaquo; edit &rsaquo; New version. Saving alone does not update the live web app. A copy is kept in <code>sheet-setup/Code.gs</code>.</li>
                 <li><b>Local copy:</b> each browser also keeps a copy in localStorage under ${code("bwmb.v1")}. Clearing browser data is safe, since it reloads from the sheet.</li>
-                <li><b>Admin PIN:</b> defaults to <b>0827</b> (<code>DEFAULT_PIN</code> in <code>store.js</code>). A PIN changed on the Admin page is saved on that device only. The unlocked state lasts for the current tab.</li>
+                <li><b>Admin PIN:</b> preset to <b>0827</b> in the Apps Script (<code>DEFAULT_ADMIN_PIN</code>). The script checks it, not the website, and the page keeps it in memory only, so reloading or leaving the Admin page locks it again. 5 wrong tries lock it for 5 minutes. To keep the PIN out of the public repo, add a Script Property named <code>ADMIN_PIN</code>, which overrides the preset.</li>
+                <li><b>Admin-only changes:</b> deleting bets or profiles, creating or editing profiles, and restoring a backup are refused by the script unless the correct PIN is sent with them. Placing bets and marking legs hit or missed stay open to everyone.</li>
             </ul>`],
 
         ["Private stakes and the admin PIN", `
             <p>A bet marked <b>private</b> hides its stake, payout and profit on every page. It still counts toward records and hit rates, but is left out of profit, ROI, at-risk and best-win totals so the amount can't be worked out.</p>
             <p>Private stakes are stored in the sheet, so <b>anyone who can open the sheet can see them</b>. Keep its sharing restricted. The script leaves the stake out of what it sends to other devices, and a device that placed a private bet keeps its own copy.</p>
-            <p>The admin PIN, the sheet password in <code>config.js</code> and the private setting are all <b>light protection</b>. The site and <code>config.js</code> are public, so someone determined could find the password and read or write the sheet's data. Real privacy needs a proper backend with sign-in.</p>`],
+            <p>The sheet password in <code>config.js</code> and the private setting are <b>light protection</b>. The site and <code>config.js</code> are public, so someone determined could find the password and read or add bets. The admin actions are protected by the PIN, which the script checks. Real privacy for everything needs a proper backend with sign-in.</p>`],
 
         ["Known limits", `
             <ul class="kb-list">
@@ -171,4 +172,4 @@
         }
         out.innerHTML = rows.map(esc).join("<br>");
     };
-})();
+};

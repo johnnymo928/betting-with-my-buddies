@@ -134,18 +134,66 @@ async function loadLeague(key) {
     updateTicker();
 }
 
+/* Hit announcements come first in the ticker. Legs of a parlay announce one by one;
+   a single bet is announced once, as a full bet. */
+const HIT_WINDOW = 3 * 3600 * 1000;      // ticker: hits from the last 3 hours
+const BANNER_WINDOW = 6 * 3600 * 1000;   // banner: full-bet hits from the last 6 hours
+const who = bet => Store.profile(bet.profileId)?.name || "Someone";
+const winText = bet => bet.private ? "" : ` · +${Store.money(bet.stake * Store.multiplier(bet.odds))}`;
+
+function hitItems() {
+    const { legs, full } = Store.recentHits(HIT_WINDOW);
+    const items = full.map(({ bet }) => {
+        const label = bet.type === "parlay" ? `${bet.legs.length}-leg parlay` : esc(bet.legs[0].text);
+        return `<span class="hit-tag full">BET HIT</span> ${esc(who(bet))} cashed ${bet.type === "parlay" ? label : "<b>" + label + "</b>"}${esc(winText(bet))}`;
+    });
+    legs.filter(({ bet }) => bet.type === "parlay" && Store.betStatus(bet) !== "won").forEach(({ bet, leg }) => {
+        const n = bet.legs.filter(l => l.status === "won").length;
+        items.push(`<span class="hit-tag">LEG HIT</span> ${esc(who(bet))}: <b>${esc(leg.text)}</b> (${n} of ${bet.legs.length} in)`);
+    });
+    return items;
+}
+
+let lastTicker = "";
 function updateTicker() {
-    const items = [];
+    const items = hitItems();
     for (const key of Object.keys(FEEDS)) {
         state[key].games.forEach(g => {
             const score = g.phase === "pre" ? g.detail : `${g.away.score}–${g.home.score} ${g.detail}`;
             items.push(`${esc(g.away.name)} @ ${esc(g.home.name)} &middot; ${esc(score)}${g.spread ? " &middot; " + esc(g.spread) : ""}`);
         });
     }
-    $("ticker-content").innerHTML = items.length
+    const html = items.length
         ? items.join('<span class="sep">&#9679;</span>')
         : "No games to show right now.";
+    if (html !== lastTicker) { lastTicker = html; $("ticker-content").innerHTML = html; }   // don't restart the scroll for nothing
 }
+
+/* ---------- Big green banner when a full bet hits ---------- */
+const DISMISS_KEY = "bwmb.dismissedHits";
+const dismissedHits = () => { try { return JSON.parse(localStorage.getItem(DISMISS_KEY)) || []; } catch { return []; } };
+
+function renderBanners() {
+    const seen = new Set(dismissedHits());
+    $("hit-banners").innerHTML = Store.recentHits(BANNER_WINDOW).full
+        .filter(h => !seen.has(h.bet.id))
+        .map(({ bet }) => `
+            <div class="hit-banner" role="status">
+                <div class="hit-emoji" aria-hidden="true">🎉</div>
+                <div class="hit-main">
+                    <div class="hit-title">${bet.type === "parlay" ? "PARLAY HIT!" : "BET HIT!"}</div>
+                    <div class="hit-sub">${esc(who(bet))} cashed ${bet.type === "parlay" ? bet.legs.length + " legs" : "it"}${bet.private ? "" : esc(winText(bet))}</div>
+                    <ul class="hit-legs">${bet.legs.map(l => `<li>✓ ${esc(l.text)}</li>`).join("")}</ul>
+                </div>
+                <button class="hit-close" data-dismiss="${esc(bet.id)}" aria-label="Dismiss banner">&times;</button>
+            </div>`).join("");
+}
+$("hit-banners").addEventListener("click", e => {
+    const id = e.target.dataset.dismiss;
+    if (!id) return;
+    try { localStorage.setItem(DISMISS_KEY, JSON.stringify([...dismissedHits(), id].slice(-100))); } catch {}
+    renderBanners();
+});
 
 /* ---------- Bets ---------- */
 // Home shows everything still pending, plus anything placed today.
@@ -159,6 +207,8 @@ function renderBets() {
     $("bets-count").textContent = x.count
         ? `${x.count} pending` + (x.count > x.hidden ? ` · ${Store.money(x.atRisk)} at risk · ${Store.money(x.toWin)} to win` : "") +
           (x.hidden ? ` · ${x.hidden} private` : "") : "";
+    renderBanners();
+    updateTicker();
 }
 window.addEventListener("storage", () => { Store.reload(); renderBets(); });
 

@@ -58,6 +58,19 @@ function doPost(e) {
   try { body = JSON.parse(e.postData.contents); } catch (err) { return json_({ error: "bad json" }); }
   if (body.secret !== SECRET) return json_({ error: "unauthorized" });
 
+  // Admin PIN, checked here (not in the website) so it can't be skipped from the browser.
+  if (body.action === "adminCheck") {
+    const r = pinCheck_(body.pin);
+    return json_(r.ok ? { ok: true } : { error: r.locked ? "locked" : "bad_pin" });
+  }
+  // Only admins can delete things, restore backups, or change profiles.
+  const adminOnly = body.action === "remove" || body.action === "replaceAll" ||
+    (body.action === "upsert" && body.kind === "profile");
+  if (adminOnly) {
+    const r = pinCheck_(body.pin);
+    if (!r.ok) return json_({ error: r.locked ? "locked" : "forbidden" });
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -244,4 +257,22 @@ function oddsRoute_(p) {
     });
     return { events: events, fetchedAt: new Date().getTime(), remaining: r.remaining };
   }));
+}
+
+/* ============================================================
+   Admin PIN
+   Default is below. To keep the PIN out of the public repo, add a Script
+   Property named ADMIN_PIN (Project Settings > Script Properties); it wins.
+   5 wrong tries in a row lock the PIN for 5 minutes.
+   ============================================================ */
+const DEFAULT_ADMIN_PIN = "0827";
+
+function pinCheck_(pin) {
+  const cache = CacheService.getScriptCache();
+  const fails = Number(cache.get("pinfails") || 0);
+  if (fails >= 5) return { ok: false, locked: true };
+  const real = PropertiesService.getScriptProperties().getProperty("ADMIN_PIN") || DEFAULT_ADMIN_PIN;
+  if (String(pin === undefined || pin === null ? "" : pin) === String(real)) return { ok: true };
+  cache.put("pinfails", String(fails + 1), 300);
+  return { ok: false, locked: false };
 }

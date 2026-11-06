@@ -1,45 +1,39 @@
 const $ = id => document.getElementById(id);
 const { esc } = Store;
 
-/* The PIN gate is light protection only: the site is public and data is in
-   the browser. Unlock lasts for this tab (sessionStorage). */
-const unlocked = () => { try { return sessionStorage.getItem("bwmb.admin") === "1"; } catch { return false; } };
-const setUnlocked = v => { try { v ? sessionStorage.setItem("bwmb.admin", "1") : sessionStorage.removeItem("bwmb.admin"); } catch {} };
-
-let changingPin = false;
-
-function showGate() {
-    const first = !Store.hasPin() || changingPin;
+/* The admin page is locked until the PIN is entered. The PIN is checked by the
+   Apps Script (see sheet-setup/Code.gs) and kept in memory only, so reloading or
+   leaving the page locks it again. Nothing below is drawn until the check passes. */
+function showGate(msg) {
     $("tools").hidden = true; $("gate").hidden = false;
-    $("gate-title").textContent = !Store.hasPin() ? "Create Admin PIN" : changingPin ? "Change PIN" : "Admin PIN";
-    $("gate-hint").textContent = !Store.hasPin()
-        ? "First time here. Choose a PIN (4+ digits) to protect the admin page."
-        : changingPin ? "Enter the new PIN." : "Enter the admin PIN to continue.";
-    $("pin-label").textContent = first ? "New PIN" : "PIN";
-    $("pin2-wrap").hidden = !first;
-    $("pin").value = $("pin2").value = ""; $("gate-error").textContent = "";
+    $("gate-title").textContent = "Admin PIN";
+    $("gate-hint").textContent = "Enter the admin PIN to continue.";
+    $("pin").value = ""; $("gate-error").textContent = msg || "";
     $("pin").focus();
 }
 function showTools() {
     $("gate").hidden = true; $("tools").hidden = false;
-    renderProfiles(); renderBets();
+    renderProfiles(); renderBets(); renderKB();
 }
 
-$("gate-form").onsubmit = e => {
-    e.preventDefault();
-    const pin = $("pin").value, err = $("gate-error");
-    if (!Store.hasPin() || changingPin) {
-        if (pin.length < 4) return void (err.textContent = "PIN must be at least 4 characters.");
-        if (pin !== $("pin2").value) return void (err.textContent = "PINs don't match.");
-        Store.setPin(pin); changingPin = false; setUnlocked(true); showTools();
-    } else if (Store.checkPin(pin)) {
-        setUnlocked(true); showTools();
-    } else {
-        err.textContent = "Wrong PIN.";
-    }
+const ERRORS = {
+    bad_pin: "Wrong PIN.",
+    locked: "Too many wrong tries. Locked for 5 minutes.",
+    network: "Couldn't reach the server. Check your connection and try again.",
+    unauthorized: "The site isn't set up correctly (bad sheet password)."
 };
-$("lock").onclick = () => { setUnlocked(false); showGate(); };
-$("change-pin").onclick = () => { changingPin = true; showGate(); };
+
+$("gate-form").onsubmit = async e => {
+    e.preventDefault();
+    const btn = $("gate-form").querySelector("button"), pin = $("pin").value;
+    if (!pin) return void ($("gate-error").textContent = "Enter the PIN.");
+    btn.disabled = true; $("gate-error").textContent = "Checking…";
+    const r = await Store.adminLogin(pin);
+    btn.disabled = false;
+    if (r.ok) showTools();
+    else { $("pin").value = ""; $("gate-error").textContent = ERRORS[r.error] || "Couldn't check the PIN."; }
+};
+$("lock").onclick = () => { Store.adminLogout(); showGate(); };
 
 /* ---------- Profiles ---------- */
 $("new-color").value = Store.COLORS[Store.profiles().length % Store.COLORS.length];
@@ -114,4 +108,4 @@ $("import").onchange = async e => {
     e.target.value = "";
 };
 
-unlocked() && Store.hasPin() ? showTools() : showGate();
+showGate();

@@ -33,13 +33,14 @@ const Store = (() => {
                     try {
                         const res = await fetch(cfg.url, {
                             method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
-                            body: JSON.stringify({ secret: cfg.secret, ...body })
+                            body: JSON.stringify({ secret: cfg.secret, pin: adminPin, ...body })
                         });
                         const j = await res.json();
                         if (j.error) throw new Error(j.error);
                         break;
                     } catch (e) {
-                        if (attempt >= 3) throw e;
+                        // a refusal won't change on retry; only network hiccups are retried
+                        if (attempt >= 3 || ["forbidden", "locked", "unauthorized", "bad_pin"].includes(e.message)) throw e;
                         await wait(3000 * attempt);
                     }
                 }
@@ -72,8 +73,10 @@ const Store = (() => {
         const remoteEmpty = !remote.profiles.length && !remote.bets.length;
 
         if (remoteEmpty && (db.profiles.length || db.bets.length)) {
-            // first connection: upload everything already on this device in one go
-            push({ action: "replaceAll", profiles: db.profiles, bets: db.bets });
+            // sheet is empty: upload what this device has. Profiles can only be
+            // created by an admin, so they are skipped unless the admin PIN is unlocked.
+            if (adminPin !== null) db.profiles.forEach(p => push({ action: "upsert", kind: "profile", record: p }));
+            db.bets.forEach(b => push({ action: "upsert", kind: "bet", record: b }));
         } else {
             const merge = (local, rem, kind) => {
                 const ids = new Set(rem.map(r => r.id));
@@ -84,7 +87,10 @@ const Store = (() => {
                 });
                 local.forEach(l => {
                     if (ids.has(l.id)) return;
-                    if (!synced.has(l.id)) { out.push(l); push({ action: "upsert", kind, record: l }); }  // new here: upload
+                    if (!synced.has(l.id)) {                       // new here: upload (profiles need the admin PIN)
+                        out.push(l);
+                        if (kind !== "profile" || adminPin !== null) push({ action: "upsert", kind, record: l });
+                    }
                     // else: it was deleted elsewhere, so drop it
                 });
                 return out;
@@ -164,7 +170,25 @@ const Store = (() => {
         leg.status = status;
         if (opts.auto) { leg.manual = false; leg.actual = opts.actual; }
         else { leg.manual = status !== "pending"; delete leg.actual; }
+        // when it was settled, so every device can announce recent hits
+        if (status === "pending") delete leg.settledAt; else leg.settledAt = Date.now();
         save(); pushBet(betId);
+    }
+
+    // Hits settled within the last `windowMs`: individual legs, and whole bets that have fully hit.
+    function recentHits(windowMs) {
+        const cutoff = Date.now() - windowMs, legs = [], full = [];
+        db.bets.forEach(b => {
+            b.legs.forEach(l => {
+                if (l.status === "won" && l.settledAt && l.settledAt >= cutoff) legs.push({ bet: b, leg: l, at: l.settledAt });
+            });
+            if (betStatus(b) === "won" && b.legs.every(l => l.settledAt)) {
+                const at = Math.max(...b.legs.map(l => l.settledAt));
+                if (at >= cutoff) full.push({ bet: b, at });
+            }
+        });
+        const newest = (a, b) => b.at - a.at;
+        return { legs: legs.sort(newest), full: full.sort(newest) };
     }
     function deleteBet(id) {
         db.bets = db.bets.filter(b => b.id !== id);
@@ -192,13 +216,29 @@ const Store = (() => {
     const money = n => (n < 0 ? "-$" : "$") + Math.abs(n).toFixed(2);
 
     /* ---------- Admin PIN (light protection only: the site is public) ---------- */
-    const hash = s => { let h = 5381; for (const c of s) h = ((h << 5) + h + c.charCodeAt(0)) | 0; return String(h); };
-    // Default PIN until an admin changes it on the Admin page. It is in the source
-    // on purpose, so anyone can read it from the public repo.
-    const DEFAULT_PIN = "0827";
-    const hasPin = () => true;
-    const setPin = pin => { db.pinHash = hash(pin); save(); };
-    const checkPin = pin => (db.pinHash || hash(DEFAULT_PIN)) === hash(pin);
+    // With the sheet connected, the PIN is checked by the Apps Script, so it isn't in this
+    // site's code. It is kept in memory only (a page reload locks the admin again) and is
+    // sent along with admin changes, which the script refuses without it.
+    const LOCAL_PIN = "0827";          // only used when no sheet is configured (browser-only mode)
+    let adminPin = null;
+    const isAdmin = () => adminPin !== null;
+    const adminLogout = () => { adminPin = null; };
+    async function adminLogin(pin) {
+        pin = String(pin || "");
+        if (!cfg) {
+            if (pin !== LOCAL_PIN) return { ok: false, error: "bad_pin" };
+            adminPin = pin; return { ok: true };
+        }
+        try {
+            const res = await fetch(cfg.url, {
+                method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({ secret: cfg.secret, action: "adminCheck", pin })
+            });
+            const j = await res.json();
+            if (j.ok) { adminPin = pin; return { ok: true }; }
+            return { ok: false, error: j.error || "bad_pin" };
+        } catch (e) { return { ok: false, error: "network" }; }
+    }
 
     /* ---------- Backup ---------- */
     const exportData = () => JSON.stringify(db, null, 2);
@@ -218,8 +258,8 @@ const Store = (() => {
     return {
         sync: { enabled: !!cfg, status: () => syncStatus, onStatus: f => statusListeners.push(f), pull },
         COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
-        bets, addBet, setLegStatus, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
-        hasPin, setPin, checkPin, exportData, importData,
+        bets, addBet, setLegStatus, recentHits, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
+        adminLogin, adminLogout, isAdmin, exportData, importData,
         reload() { db = Object.assign({ profiles: [], bets: [], pinHash: null }, load()); }
     };
 })();
