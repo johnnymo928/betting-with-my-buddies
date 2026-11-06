@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback &middot; Betting with Buddies</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <span class="live-dot" aria-hidden="true"></span>
+        <div><h1>Betting with Buddies</h1><p class="tagline">Feedback</p></div>
+    </div>
+</header>
+
+<main class="dashboard page-narrow">
+    <section class="panel">
+        <div class="panel-head"><h2><span class="tag tag-gold">IDEA</span> Share an Idea</h2></div>
+        <p class="hint">Something you'd like to see, something that's broken, or something that could be better. Every idea is saved to a shared list, and updates to the site are planned from it.</p>
+
+        <form id="fb-form" class="form" novalidate>
+            <div class="row">
+                <label>From
+                    <select id="fb-name"></select>
+                </label>
+                <label>Type
+                    <select id="fb-cat">
+                        <option>Idea</option>
+                        <option>Bug</option>
+                        <option>Design</option>
+                        <option>Odds &amp; lines</option>
+                        <option>Stats &amp; insights</option>
+                        <option>Other</option>
+                    </select>
+                </label>
+            </div>
+            <label>Your idea
+                <textarea id="fb-text" rows="5" maxlength="1000" placeholder="Describe it in a few sentences. What do you want, and why would it help?" required></textarea>
+            </label>
+            <p class="hint" id="fb-count">0 / 1000</p>
+            <p class="form-error" id="fb-msg" role="alert"></p>
+            <button class="btn primary" type="submit" id="fb-send">Send idea</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <div class="panel-head">
+            <h2><span class="tag">LIST</span> Ideas So Far</h2>
+            <span class="page-info" id="fb-total"></span>
+        </div>
+        <div id="fb-list" class="fb-list"></div>
+    </section>
+</main>
+
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="nav.js"></script>
+<script src="feedback.js"></script>
+</body>
+</html>

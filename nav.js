@@ -4,6 +4,7 @@
         ["index.html", "Home"],
         ["bet.html", "Place Bet"],
         ["insights.html", "Insights"],
+        ["feedback.html", "Feedback"],
         ["admin.html", "Admin"]
     ];
     const cur = location.pathname.split("/").pop() || "index.html";

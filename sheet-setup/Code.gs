@@ -39,6 +39,7 @@ const JSON_COL = HEADERS.length;   // 14
 function doGet(e) {
   if (!e.parameter || e.parameter.secret !== SECRET) return json_({ error: "unauthorized" });
   if (e.parameter.action === "odds") return oddsRoute_(e.parameter);
+  if (e.parameter.action === "feedback") return json_({ items: listFeedback_() });
   const all = readAll_();
   all.bets = all.bets.map(function (b) {
     if (!b.private) return b;
@@ -57,6 +58,9 @@ function doPost(e) {
   let body;
   try { body = JSON.parse(e.postData.contents); } catch (err) { return json_({ error: "bad json" }); }
   if (body.secret !== SECRET) return json_({ error: "unauthorized" });
+
+  // Feedback ideas are open to everyone (rate limited)
+  if (body.action === "feedback") return json_(addFeedback_(body));
 
   // Admin PIN, checked here (not in the website) so it can't be skipped from the browser.
   if (body.action === "adminCheck") {
@@ -371,6 +375,59 @@ function oddsRoute_(p) {
 
   // game lines: just read today's saved snapshot. Never spends credits.
   return json_(readSnap_(p.league) || { events: [], fetchedAt: null, none: true });
+}
+
+/* ============================================================
+   Feedback: ideas from the website's Feedback page.
+   Saved on their own tab, "Feedback", one row per idea. Edit the Status
+   column (New, Planned, In progress, Done, Won't do) any time; the website shows it.
+   This tab is never rebuilt, so notes and extra columns you add are safe.
+   ============================================================ */
+const FEEDBACK_TAB = "Feedback";
+const FEEDBACK_HEADERS = ["Submitted", "From", "Category", "Idea", "Status", "ID", "Page"];
+
+function feedbackSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(FEEDBACK_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(FEEDBACK_TAB);
+    sh.getRange(1, 1, 1, FEEDBACK_HEADERS.length).setValues([FEEDBACK_HEADERS]).setFontWeight("bold");
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(4, 520);
+    sh.getRange("D:D").setWrap(true);
+    sh.getRange("A:A").setNumberFormat("yyyy-mm-dd hh:mm");
+  }
+  return sh;
+}
+
+// trim, cap the length, and stop anything that looks like a formula from running in the sheet
+function clean_(s, max) {
+  s = String(s === undefined || s === null ? "" : s).trim().slice(0, max);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
+function addFeedback_(rec) {
+  const text = clean_(rec.text, 1000);
+  if (text.length < 3) return { error: "too_short" };
+  const cache = CacheService.getScriptCache();
+  const n = Number(cache.get("fb:hour") || 0);
+  if (n >= 30) return { error: "rate_limited" };           // at most 30 ideas an hour, so nobody can flood the sheet
+  cache.put("fb:hour", String(n + 1), 3600);
+  const id = Utilities.getUuid().slice(0, 8);
+  feedbackSheet_().appendRow([new Date(), clean_(rec.name, 40) || "Anonymous", clean_(rec.category, 30) || "Idea", text, "New", id, clean_(rec.page, 40)]);
+  return { ok: true, id: id };
+}
+
+function listFeedback_() {
+  const sh = feedbackSheet_(), n = sh.getLastRow();
+  if (n < 2) return [];
+  return sh.getRange(2, 1, n - 1, FEEDBACK_HEADERS.length).getValues()
+    .filter(function (r) { return r[3]; })
+    .map(function (r) {
+      return { at: r[0] instanceof Date ? r[0].getTime() : null, name: String(r[1]), category: String(r[2]), text: String(r[3]), status: String(r[4] || "New"), id: String(r[5]) };
+    })
+    .reverse()
+    .slice(0, 200);
 }
 
 /* ============================================================

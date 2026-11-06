@@ -124,6 +124,24 @@ window.renderKB = function () {
                 <li><b>Admin-only changes:</b> removing or restoring bets, deleting bets or profiles, creating or editing profiles, and restoring a backup are refused by the script unless the correct PIN is sent with them. Placing bets and marking legs hit or missed stay open to everyone.</li>
             </ul>`],
 
+        ["Feedback and ideas", `
+            <p>The <b>Feedback</b> page lets anyone send an idea, a bug report or a request. Each one is saved as a row on a separate <b>Feedback</b> tab in the Google Sheet, so the sheet is the running to-do list for the site.</p>
+            <table class="table"><thead><tr><th>Column</th><th>Meaning</th></tr></thead><tbody>
+                <tr><td>Submitted</td><td>When it was sent</td></tr>
+                <tr><td>From</td><td>The profile the sender picked, or Anonymous</td></tr>
+                <tr><td>Category</td><td>Idea, Bug, Design, Odds &amp; lines, Stats &amp; insights, or Other</td></tr>
+                <tr><td>Idea</td><td>The text (up to 1,000 characters)</td></tr>
+                <tr><td>Status</td><td>Starts as <b>New</b>. Edit it in the sheet to Planned, In progress, Done or Won't do. The Feedback page shows the status next to each idea.</td></tr>
+                <tr><td>ID, Page</td><td>Internal reference</td></tr>
+            </tbody></table>
+            <ul class="kb-list">
+                <li><b>Making updates later:</b> when you are ready, ask Claude to read the Feedback tab and plan changes from the ideas that are still New or Planned.</li>
+                <li><b>Open to everyone:</b> no PIN is needed to send or read ideas. Ideas are visible to everyone who opens the page.</li>
+                <li><b>Protection:</b> at most 30 ideas an hour can be added, text is capped at 1,000 characters, and anything starting with =, +, - or @ is stored as plain text so it can't run as a spreadsheet formula.</li>
+                <li><b>Safe to edit:</b> the script only adds rows and reads them. It never rewrites this tab, so your notes and extra columns are kept. Don't rename the tab or the first row.</li>
+                <li><b>Drafts:</b> if sending fails, the text stays in the box and is kept as a draft on that device.</li>
+            </ul>`],
+
         ["Private stakes and the admin PIN", `
             <p>A bet marked <b>private</b> hides its stake, payout and profit on every page. It still counts toward records and hit rates, but is left out of profit, ROI, at-risk and best-win totals so the amount can't be worked out.</p>
             <p>Private stakes are stored in the sheet, so <b>anyone who can open the sheet can see them</b>. Keep its sharing restricted. The script leaves the stake out of what it sends to other devices, and a device that placed a private bet keeps its own copy.</p>
@@ -143,6 +161,7 @@ window.renderKB = function () {
             <table class="table"><thead><tr><th>File</th><th>Purpose</th></tr></thead><tbody>
                 <tr><td><code>index.html</code>, <code>script.js</code></td><td>Home: scoreboards, ticker, active bets</td></tr>
                 <tr><td><code>bet.html</code>, <code>bet.js</code></td><td>Dropdown bet builder and bet list</td></tr>
+                <tr><td><code>feedback.html</code>, <code>feedback.js</code></td><td>Feedback page: ideas saved to the Feedback tab of the sheet</td></tr>
                 <tr><td><code>insights.html</code>, <code>insights.js</code></td><td>Stats, leaderboard, parlay and bet-type analysis</td></tr>
                 <tr><td><code>admin.html</code>, <code>admin.js</code>, <code>kb.js</code></td><td>PIN gate, profiles, backups, this Knowledge Base</td></tr>
                 <tr><td><code>store.js</code></td><td>All saving and loading of profiles and bets, sheet sync, plus payout math</td></tr>

@@ -497,3 +497,17 @@ optgroup{color:var(--muted);font-style:normal}
 
 /* ---------- Admin odds status ---------- */
 .odds-status{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.7;margin-bottom:12px}
+
+/* ---------- Feedback page ---------- */
+textarea{background:#0d1421;border:1px solid var(--line);color:var(--text);font:inherit;font-size:15px;padding:10px 12px;border-radius:10px;width:100%;resize:vertical;min-height:110px}
+textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
+.form-error.ok{color:var(--green)}
+.fb-list{display:grid;gap:10px}
+.fb-item{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:8px}
+.fb-item header{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.fb-item p{font-size:15px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.fb-status{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:5px;background:rgba(62,166,255,.14);color:var(--accent)}
+.fb-status.planned{background:rgba(167,139,250,.16);color:#a78bfa}
+.fb-status.doing{background:rgba(245,185,66,.16);color:var(--gold)}
+.fb-status.done{background:rgba(52,211,153,.16);color:var(--green)}
+.fb-status.no{background:rgba(139,151,173,.16);color:var(--muted)}
