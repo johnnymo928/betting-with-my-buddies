@@ -121,7 +121,8 @@ const Live = (() => {
             if (!def) return { ...base, value: null, grade: "pending" };
             const { played, value } = statValue(summary.boxscore, pick.athleteId, def);
             const over = pick.side === "over", exceeded = value > pick.line;
-            const r = { ...base, value, text: `${value} / ${pick.line}`, ratio: Math.min(1, value / (pick.line || 1)) };
+            const target = pick.atLeast ?? pick.line;          // an "At least 50" prop shows progress toward 50
+            const r = { ...base, value, text: `${value} / ${target}`, ratio: Math.min(1, value / (target || 1)) };
             // Live: an over that clears the line is a lock; an under that passes it is dead.
             if (!final) return { ...r, grade: exceeded ? (over ? "won" : "lost") : "pending" };
             if (!played) return { ...r, grade: "pending", note: "No stats recorded for this player. Grade it by hand." };

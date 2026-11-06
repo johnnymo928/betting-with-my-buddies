@@ -548,3 +548,8 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
 @media (max-width:560px){
     .qr{display:none}      /* people on a phone are already here */
 }
+
+/* ---------- Quick "X+" buttons for player props ---------- */
+.quick{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px}
+.quick[hidden]{display:none}
+.quick .btn.sm{margin-left:0;padding:6px 14px;font-size:13px}

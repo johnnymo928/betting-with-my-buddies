@@ -14,6 +14,14 @@ const KINDS = [
 // sensible default stat per position when a player is picked
 const DEFAULT_STAT = { QB: "pass_yds", RB: "rush_yds", FB: "rush_yds", WR: "rec_yds", TE: "rec_yds", PK: "fg", K: "fg" };
 const POS_ORDER = ["QB", "RB", "FB", "WR", "TE", "PK", "K"];
+// quick "X+" buttons for each stat (an "At least" prop is saved as Over X minus 0.5, so 50+ = Over 49.5)
+const THRESHOLDS = {
+    pass_yds: [200, 250, 300], pass_tds: [1, 2, 3], pass_cmp: [15, 20, 25], pass_att: [25, 30, 35], ints: [1, 2],
+    rush_yds: [25, 50, 75, 100], rush_att: [10, 15, 20], rush_tds: [1, 2],
+    rec_yds: [25, 50, 75, 100, 125], rec: [3, 4, 5, 6, 8], rec_tds: [1, 2],
+    rr_yds: [50, 75, 100, 125], pr_yds: [250, 300, 350], td_any: [1, 2],
+    fg: [1, 2, 3], sacks: [1, 2], tackles: [5, 7, 10]
+};
 
 /* ---------- Profiles ---------- */
 function renderProfiles() {
@@ -107,11 +115,17 @@ function legRow() {
                 <label>Player <select class="f-player"><option value="">Loading players&hellip;</option></select></label>
                 <label>Stat <select class="f-stat">${Object.entries(groups).map(([g, items]) =>
                     `<optgroup label="${g}">${opts(items)}</optgroup>`).join("")}</select></label>
-                <label>Pick <select class="f-side">${sideOpts}</select></label>
-                <label>Line <input type="number" step="0.5" min="0" class="f-line" placeholder="249.5"></label>`;
+                <label>Pick <select class="f-side">${sideOpts}<option value="atleast">At least (X+)</option></select></label>
+                <label><span class="line-label">Line</span> <input type="number" step="0.5" min="0" class="f-line" placeholder="249.5"></label>
+                <div class="quick" hidden></div>`;
             q(".f-team").onchange = renderPlayers;
-            q(".f-player").onchange = () => { suggestStat(); refreshLines(); };
-            q(".f-stat").onchange = refreshLines;
+            q(".f-player").onchange = () => { suggestStat(); syncAtLeast(); refreshLines(); };
+            q(".f-stat").onchange = () => { syncAtLeast(); refreshLines(); };
+            q(".f-side").onchange = syncAtLeast;
+            q(".quick").onclick = e => {
+                const n = e.target.dataset.n;
+                if (n) { q(".f-line").value = n; q(".f-line").focus(); }
+            };
             loadPlayers();
         }
         refreshLines();
@@ -229,6 +243,21 @@ function legRow() {
         recomputeOdds();
     });
 
+    // "At least" mode: whole numbers only, with quick buttons for the usual thresholds of the chosen stat
+    function syncAtLeast() {
+        const side = q(".f-side"), line = q(".f-line"), quick = q(".quick");
+        if (!side || !line || !quick || q(".f-kind").value !== "prop") return;
+        const atLeast = side.value === "atleast";
+        line.step = atLeast ? "1" : "0.5";
+        line.placeholder = atLeast ? "50" : "249.5";
+        q(".line-label").textContent = atLeast ? "At least" : "Line";
+        if (atLeast && line.value && !Number.isInteger(Number(line.value))) line.value = "";
+        quick.hidden = !atLeast;
+        quick.innerHTML = atLeast
+            ? (THRESHOLDS[q(".f-stat").value] || [1, 2, 3]).map(n => `<button type="button" class="btn ghost sm" data-n="${n}">${n}+</button>`).join("")
+            : "";
+    }
+
     function prefillSpread() {
         const line = q(".f-line"), g = st.game;
         if (!line || !g || line.dataset.touched) { if (line && !g) line.value = ""; return; }
@@ -300,10 +329,16 @@ function legRow() {
         const pid = q(".f-player").value;
         if (!pid) throw new Error("Select a player for every prop.");
         needLine();
-        const p = st.players.find(x => x.id === pid), def = Live.statDef(q(".f-stat").value), side = q(".f-side").value;
+        const p = st.players.find(x => x.id === pid), def = Live.statDef(q(".f-stat").value), sideVal = q(".f-side").value;
+        const atLeast = sideVal === "atleast";
+        if (atLeast && (!Number.isInteger(line) || line < 1)) throw new Error("\"At least\" needs a whole number, like 1 or 50.");
+        const side = atLeast ? "over" : sideVal;
         return {
-            pick: { ...base, athleteId: pid, athleteName: p.name, team: p.team, stat: def.key, statLabel: def.label, side, line },
-            text: `${p.name} ${side === "over" ? "Over" : "Under"} ${line} ${def.label} (${g.label})`
+            // "50+" is stored as Over 49.5, so grading, progress and the live checks work unchanged
+            pick: { ...base, athleteId: pid, athleteName: p.name, team: p.team, stat: def.key, statLabel: def.label, side,
+                line: atLeast ? line - 0.5 : line, ...(atLeast ? { atLeast: line } : {}) },
+            text: atLeast ? `${p.name} ${line}+ ${def.label} (${g.label})`
+                : `${p.name} ${side === "over" ? "Over" : "Under"} ${line} ${def.label} (${g.label})`
         };
     };
 

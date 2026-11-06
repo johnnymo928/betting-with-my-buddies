@@ -83,7 +83,7 @@ window.renderKB = function () {
                 <tr><td>Spread</td><td>League, game ID, team ID, opponent ID, line</td></tr>
                 <tr><td>Moneyline</td><td>League, game ID, team ID, opponent ID</td></tr>
                 <tr><td>Total</td><td>League, game ID, home and away IDs, over/under, line</td></tr>
-                <tr><td>Player prop (NFL only)</td><td>League, game ID, ESPN player ID, stat, over/under, line. Not offered for college football because it isn't legal in this state</td></tr>
+                <tr><td>Player prop (NFL only)</td><td>League, game ID, ESPN player ID, stat, over/under, line. The pick can also be <b>At least (X+)</b>, such as 1+ receiving TDs or 50+ receiving yards, with quick buttons for common thresholds. It is stored as Over X minus 0.5 (50+ is Over 49.5), so grading works the same. Props are not offered for college football because they aren't legal in this state</td></tr>
             </tbody></table>
             <p>A <b>parlay</b> is one bet with several legs and one stake and odds. It loses as soon as any leg loses and wins only when every leg wins. Insights uses this to show which legs killed parlays.</p>`],
 
