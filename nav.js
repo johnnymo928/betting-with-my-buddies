@@ -21,7 +21,8 @@
     if (!Store.sync.enabled) return;
     const el = document.createElement("span");
     el.className = "sync";
-    document.querySelector(".nav").after(el);
+    const stack = document.querySelector(".topbar .topright");
+    if (stack) stack.prepend(el); else document.querySelector(".nav").after(el);
     const LABEL = { connecting: "Connecting\u2026", synced: "Shared \u00b7 synced" };
     const show = s => {
         const n = Store.sync.pending();

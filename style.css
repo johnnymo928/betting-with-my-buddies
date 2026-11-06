@@ -553,3 +553,13 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
 .quick{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px}
 .quick[hidden]{display:none}
 .quick .btn.sm{margin-left:0;padding:6px 14px;font-size:13px}
+
+/* ---------- QR code pinned to the top-right corner of Home ---------- */
+.topbar.has-qr{position:relative;padding-right:196px}
+.topbar.has-qr .qr{position:absolute;right:0;top:18px}
+.topright{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+@media (max-width:860px){
+    .topbar.has-qr{padding-right:0}
+    .topbar.has-qr .qr{position:static}
+    .topright{align-items:center;width:100%}
+}
