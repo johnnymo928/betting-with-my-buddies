@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insights &middot; Betting With My Buddies</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <span class="live-dot" aria-hidden="true"></span>
+        <div><h1>Betting With My Buddies</h1><p class="tagline">Insights</p></div>
+    </div>
+</header>
+
+<main class="dashboard page-narrow wide">
+    <section class="panel panel-wide">
+        <div class="panel-head">
+            <h2><span class="tag">STATS</span> <span id="scope-title">Everyone</span></h2>
+            <select id="scope" aria-label="Choose profile"></select>
+        </div>
+        <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section class="panel panel-wide">
+        <div class="panel-head"><h2><span class="tag tag-gold">BOARD</span> Leaderboard</h2></div>
+        <div class="table-wrap"><table class="table" id="board"></table></div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><h2><span class="tag tag-alt">PARLAYS</span> What Hits &amp; Fails</h2></div>
+        <div id="parlay-stats"></div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><h2><span class="tag">FORM</span> Recent Results</h2></div>
+        <div id="form-strip"></div>
+        <div id="notes" class="notes"></div>
+    </section>
+
+    <section class="panel panel-wide">
+        <div class="panel-head"><h2><span class="tag tag-gold">KILLERS</span> Parlays Busted by a Leg</h2></div>
+        <div id="killers"></div>
+    </section>
+</main>
+
+<script src="store.js"></script>
+<script src="nav.js"></script>
+<script src="insights.js"></script>
+</body>
+</html>

@@ -1,323 +1,192 @@
+/* ============================================================
+   Betting With My Buddies
+   ============================================================ */
 
-    
-     let nflGames = [
-   {
-    matchup: "Carolina Panthers at Green Bay Packers",
-    status: "Final"
-},
-    {
-        matchup: "Chiefs (-6.5) vs Raiders",
-        status: "24 - 21 Q4"
-        
+/* ---------- Config ---------- */
+const PAGE_SIZE = 4;
+const ROTATE_MS = 7000;
+const REFRESH_MS = 60000;
+
+const FEEDS = {
+    nfl: {
+        url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+        container: "nfl-container", status: "nfl-status", dots: "nfl-dots",
+        label: "NFL"
     },
-    {
-        matchup: "Bills (-2.5) vs Dolphins",
-        status: "7:20 PM"
-    },
-    {
-        matchup: "Cowboys (-1.5) vs Eagles",
-        status: "8:20 PM"
-    },
-    {
-        matchup: "Lions (-4.5) vs Bears",
-        status: "1:00 PM"
-    },
-    {
-        matchup: "Packers (+2.5) vs Vikings",
-        status: "4:25 PM"
-    },
-    {
-        matchup: "Ravens (-7) vs Browns",
-        status: "1:00 PM"
-    },
-    {
-        matchup: "49ers (-3) vs Rams",
-        status: "8:20 PM"
+    ncaaf: {
+        url: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&limit=100",
+        container: "ncaaf-container", status: "ncaaf-status", dots: "ncaaf-dots",
+        label: "NCAAF"
     }
-];
+};
 
-const nflContainer = document.getElementById("nfl-container");
-const tickerContent =
-    document.getElementById("ticker-content");
+const state = {};   // per-league: { games, page, timer, error }
+const $ = id => document.getElementById(id);
 
-let currentNFLPage = 0;
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-function renderNFLGames() {
+/* ---------- Parse an ESPN event into something renderable ---------- */
+function parseEvent(event) {
+    const comp = event.competitions?.[0];
+    if (!comp) return null;
 
-    nflContainer.innerHTML = "";
+    const side = ha => comp.competitors.find(c => c.homeAway === ha) || {};
+    const away = side("away"), home = side("home");
+    const odds = comp.odds?.[0];
+    const st = event.status?.type || {};
 
-    const start = currentNFLPage * 4;
-
-    const gamesToShow = nflGames.slice(start, start + 4);
-document.getElementById("nfl-status").innerText =
-    `Showing Games ${start + 1}-${Math.min(start + 4, nflGames.length)} of ${nflGames.length}`;
-    gamesToShow.forEach(game => {
-
-       nflContainer.innerHTML += `
-    <div class="game">
-        <div>${game.matchup}</div>
-        <span>${game.status}</span>
-    </div>
-`;
-
+    const team = c => ({
+        name: c.team?.shortDisplayName || c.team?.displayName || "TBD",
+        logo: c.team?.logo || "",
+        score: c.score ?? "",
+        rank: c.curatedRank?.current && c.curatedRank.current <= 25 ? c.curatedRank.current : null,
+        winner: c.winner === true
     });
 
-}
-
-renderNFLGames();
-setInterval(() => {
-
-    currentNFLPage++;
-
-    const totalNFLPages = Math.ceil(nflGames.length / 4);
-
-if(currentNFLPage >= totalNFLPages){
-    currentNFLPage = 0;
-}
-
-    renderNFLGames();
-
-}, 7000);
-
-let ncaafGames = [
-    {
-        matchup: "Ohio State (-14.5) vs Iowa",
-        status: "31 - 14"
-    },
-    {
-        matchup: "Michigan (-7.5) vs Wisconsin",
-        status: "17 - 13"
-    },
-    {
-        matchup: "Oregon (-5.5) vs USC",
-        status: "24 - 20"
-    },
-    {
-    matchup: "Texas (-10.5) vs Baylor",
-    status: "28 - 10"
-},
-
-{
-    matchup: "Penn State (-3.5) vs USC",
-    status: "21 - 17"
-},
-{
-    matchup: "Alabama (-10.5) vs Tennessee",
-    status: "35 - 24"
-},
-{
-    matchup: "Notre Dame (-7) vs Louisville",
-    status: "28 - 14"
-},
-{
-    matchup: "LSU (-4) vs Auburn",
-    status: "17 - 13"
-}
-
-];
-
-
-const ncaafContainer = document.getElementById("ncaaf-container");
-
-let currentNCAAFPage = 0;
-
-function renderNCAAFGames() {
-
-    ncaafContainer.innerHTML = "";
-
-    const start = currentNCAAFPage * 4;
-
-    const gamesToShow = ncaafGames.slice(start, start + 4);
-document.getElementById("ncaaf-status").innerText =
-    `Showing Games ${start + 1}-${Math.min(start + 4, ncaafGames.length)} of ${ncaafGames.length}`;
-    gamesToShow.forEach(game => {
-
-        ncaafContainer.innerHTML += `
-            <div class="game">
-                ${game.matchup}
-                <span>${game.status}</span>
-            </div>
-        `;
-
-    });
-
-}
-
-renderNCAAFGames();
-
-setInterval(() => {
-
-    currentNCAAFPage++;
-
-    const totalNCAAFPages = Math.ceil(ncaafGames.length / 4);
-
-if(currentNCAAFPage >= totalNCAAFPages){
-    currentNCAAFPage = 0;
-}
-
-    renderNCAAFGames();
-
-}, 7000);
-function updateClock() {
-
-    const now = new Date();
-
-    const options = {
-        weekday: "long",
-        month: "short",
-        day: "numeric"
+    return {
+        away: team(away),
+        home: team(home),
+        phase: st.state || "pre",                 // pre | in | post
+        detail: st.shortDetail || "",
+        spread: odds?.details || null,
+        total: odds?.overUnder ?? null
     };
-
-    const dateString = now.toLocaleDateString("en-US", options);
-
-    const timeString = now.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit"
-});
-
-    document.getElementById("clock").innerText =
-        `${dateString} • ${timeString}`;
 }
 
+/* ---------- Rendering ---------- */
+function teamRow(t, phase, otherScore) {
+    const showScore = phase !== "pre";
+    const loser = phase === "post" && Number(t.score) < Number(otherScore);
+    return `
+        <div class="team ${loser ? "loser" : ""}">
+            ${t.logo ? `<img src="${esc(t.logo)}" alt="" loading="lazy">` : ""}
+            ${t.rank ? `<span class="rank">${t.rank}</span>` : ""}
+            <span class="name">${esc(t.name)}</span>
+        </div>
+        <div class="score ${loser ? "loser" : ""}">${showScore ? esc(t.score) : ""}</div>`;
+}
+
+function gameCard(g) {
+    const badge = { pre: "Upcoming", in: "Live", post: "Final" }[g.phase];
+    return `
+    <article class="game ${g.phase === "in" ? "is-live" : ""}">
+        ${teamRow(g.away, g.phase, g.home.score)}
+        ${teamRow(g.home, g.phase, g.away.score)}
+        <div class="meta">
+            <span class="badge ${g.phase}">${badge}</span>
+            <span>${esc(g.detail)}</span>
+            ${g.spread ? `<span class="chip"><b>LINE</b>${esc(g.spread)}</span>` : ""}
+            ${g.total ? `<span class="chip"><b>O/U</b>${esc(g.total)}</span>` : ""}
+        </div>
+    </article>`;
+}
+
+function renderLeague(key) {
+    const cfg = FEEDS[key], s = state[key];
+    const box = $(cfg.container), status = $(cfg.status), dots = $(cfg.dots);
+    const pages = Math.max(1, Math.ceil(s.games.length / PAGE_SIZE));
+    if (s.page >= pages) s.page = 0;
+
+    if (!s.games.length) {
+        box.innerHTML = `<div class="empty ${s.error ? "error" : ""}">
+            ${s.error ? "Couldn't load " + cfg.label + " scores. Retrying&hellip;" : s.loaded ? "No " + cfg.label + " games on the board right now." : "Loading&hellip;"}
+        </div>`;
+        status.textContent = "";
+        dots.innerHTML = "";
+        return;
+    }
+
+    const start = s.page * PAGE_SIZE;
+    box.innerHTML = s.games.slice(start, start + PAGE_SIZE).map(gameCard).join("");
+    status.textContent = `Games ${start + 1}–${Math.min(start + PAGE_SIZE, s.games.length)} of ${s.games.length}`;
+
+    dots.innerHTML = pages > 1
+        ? Array.from({ length: pages }, (_, i) =>
+            `<button class="${i === s.page ? "active" : ""}" data-page="${i}" aria-label="Page ${i + 1}"></button>`).join("")
+        : "";
+}
+
+function startRotation(key) {
+    const s = state[key];
+    clearInterval(s.timer);
+    s.timer = setInterval(() => {
+        s.page++;
+        renderLeague(key);
+    }, ROTATE_MS);
+}
+
+/* ---------- Data ---------- */
+async function loadLeague(key) {
+    const s = state[key];
+    try {
+        const res = await fetch(FEEDS[key].url);
+        if (!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        s.games = (data.events || []).map(parseEvent).filter(Boolean);
+        s.error = false;
+    } catch (err) {
+        console.error(key, err);
+        s.error = true;           // keep showing last good data if we have it
+    }
+    s.loaded = true;
+    renderLeague(key);
+    updateTicker();
+}
+
+function updateTicker() {
+    const items = [];
+    for (const key of Object.keys(FEEDS)) {
+        state[key].games.forEach(g => {
+            const score = g.phase === "pre" ? g.detail : `${g.away.score}–${g.home.score} ${g.detail}`;
+            items.push(`${esc(g.away.name)} @ ${esc(g.home.name)} &middot; ${esc(score)}${g.spread ? " &middot; " + esc(g.spread) : ""}`);
+        });
+    }
+    $("ticker-content").innerHTML = items.length
+        ? items.join('<span class="sep">&#9679;</span>')
+        : "No games to show right now.";
+}
+
+/* ---------- Bets ---------- */
+// Home shows everything still pending, plus anything placed today.
+function renderBets() {
+    const startOfDay = new Date().setHours(0, 0, 0, 0);
+    const shown = Store.bets().filter(b => Store.betStatus(b) === "pending" || b.createdAt >= startOfDay);
+    $("bets").innerHTML = shown.length
+        ? shown.map(b => UI.betCard(b)).join("")
+        : `<div class="empty">No active bets. <a class="link" href="bet.html">Place one</a>.</div>`;
+    const pending = shown.filter(b => Store.betStatus(b) === "pending").length;
+    $("bets-count").textContent = shown.length ? `${pending} pending` : "";
+}
+window.addEventListener("storage", () => { Store.reload(); renderBets(); });
+
+/* ---------- Clock ---------- */
+function updateClock() {
+    const now = new Date();
+    $("clock").textContent =
+        now.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }) +
+        " • " +
+        now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+}
+
+/* ---------- Boot ---------- */
+for (const key of Object.keys(FEEDS)) {
+    state[key] = { games: [], page: 0, timer: null, error: false, loaded: false };
+    renderLeague(key);
+    startRotation(key);
+    loadLeague(key);
+    setInterval(() => loadLeague(key), REFRESH_MS);
+
+    // click a pager dot to jump to a page
+    $(FEEDS[key].dots).addEventListener("click", e => {
+        const p = e.target.dataset.page;
+        if (p === undefined) return;
+        state[key].page = Number(p);
+        renderLeague(key);
+        startRotation(key);   // restart the timer so it doesn't flip right away
+    });
+}
+
+renderBets();
 updateClock();
-
 setInterval(updateClock, 1000);
-
-
-
-
-async function buildLiveNFLArray() {
-
-    const response = await fetch(
-        "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
-    );
-
-    const data = await response.json();
-
-    const liveGames = data.events.map(event => ({
-
-    matchup: event.name,
-
-    status: (() => {
-
-    const state = event.status.type.state;
-
-    const awayScore =
-        event.competitions[0].competitors[0].score;
-
-    const homeScore =
-        event.competitions[0].competitors[1].score;
-
-    const spread =
-        event.competitions[0].odds?.[0]?.details || "No Line";
-
-    const overUnder =
-        event.competitions[0].odds?.[0]?.overUnder || "N/A";
-
-    if (state === "pre") {
-
-        return event.status.type.shortDetail +
-            " • " +
-            spread +
-            " • O/U " +
-            overUnder;
-
-    }
-
-    return awayScore +
-        "-" +
-        homeScore +
-        " " +
-        event.status.type.shortDetail +
-        " • " +
-        spread +
-        " • O/U " +
-        overUnder;
-
-})()
-}));
-
-nflGames = liveGames;
-
-currentNFLPage = 0;
-
-renderNFLGames();
-
-tickerContent.innerText =
-    "🏈 NFL TICKER • " +
-    liveGames
-        .map(game =>
-            `${game.matchup} • ${game.status}`
-        )
-        .join(" • ");
-
-
-
-}
-
-buildLiveNFLArray();
-setInterval(buildLiveNFLArray, 60000);
-async function buildLiveNCAAFArray() {
-
-    const response = await fetch(
-        "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
-    );
-
-    const data = await response.json();
-
-    const liveGames = data.events.map(event => ({
-
-    matchup: event.name,
-
-    status: (() => {
-
-    const state = event.status.type.state;
-
-    const awayScore =
-        event.competitions[0].competitors[0].score;
-
-    const homeScore =
-        event.competitions[0].competitors[1].score;
-
-    const spread =
-        event.competitions[0].odds?.[0]?.details || "No Line";
-
-    const overUnder =
-        event.competitions[0].odds?.[0]?.overUnder || "N/A";
-
-    if (state === "pre") {
-
-        return event.status.type.shortDetail +
-            " • " +
-            spread +
-            " • O/U " +
-            overUnder;
-
-    }
-
-    return awayScore +
-        "-" +
-        homeScore +
-        " " +
-        event.status.type.shortDetail +
-        " • " +
-        spread +
-        " • O/U " +
-        overUnder;
-
-})()
-}));
-
-    ncaafGames = liveGames;
-
-    currentNCAAFPage = 0;
-
-    renderNCAAFGames();
-
-    
-
-}
-
-buildLiveNCAAFArray();
-setInterval(buildLiveNCAAFArray, 60000);

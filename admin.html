@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin &middot; Betting With My Buddies</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <span class="live-dot" aria-hidden="true"></span>
+        <div><h1>Betting With My Buddies</h1><p class="tagline">Admin</p></div>
+    </div>
+</header>
+
+<main class="dashboard page-narrow">
+
+    <!-- PIN gate -->
+    <section class="panel" id="gate" hidden>
+        <div class="panel-head"><h2><span class="tag tag-gold">LOCKED</span> <span id="gate-title">Admin PIN</span></h2></div>
+        <form id="gate-form" class="form" novalidate>
+            <p class="hint" id="gate-hint"></p>
+            <label><span id="pin-label">PIN</span>
+                <input id="pin" type="password" inputmode="numeric" autocomplete="off" minlength="4" required>
+            </label>
+            <label id="pin2-wrap" hidden>Confirm PIN
+                <input id="pin2" type="password" inputmode="numeric" autocomplete="off">
+            </label>
+            <p class="form-error" id="gate-error" role="alert"></p>
+            <button class="btn primary" type="submit">Continue</button>
+        </form>
+    </section>
+
+    <!-- Admin tools -->
+    <div id="tools" hidden>
+        <section class="panel">
+            <div class="panel-head"><h2><span class="tag">PROFILES</span> Manage Profiles</h2></div>
+            <form id="profile-form" class="form inline" novalidate>
+                <input id="new-name" type="text" maxlength="24" placeholder="New profile name" aria-label="New profile name">
+                <input id="new-color" type="color" aria-label="Profile color">
+                <button class="btn primary" type="submit">Add</button>
+            </form>
+            <p class="form-error" id="profile-error" role="alert"></p>
+            <ul class="profile-list" id="profile-list"></ul>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2><span class="tag tag-alt">DATA</span> Backup &amp; Security</h2></div>
+            <p class="hint">Data lives in this browser only. Export a backup now and then, and use Import to move it to another device.</p>
+            <div class="row-btns">
+                <button class="btn ghost" id="export">Export backup</button>
+                <label class="btn ghost file">Import backup<input id="import" type="file" accept="application/json" hidden></label>
+                <button class="btn ghost" id="change-pin">Change PIN</button>
+                <button class="btn ghost" id="lock">Lock</button>
+            </div>
+            <p class="form-error" id="data-msg" role="status"></p>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2><span class="tag tag-gold">BETS</span> Remove Bets</h2></div>
+            <div id="admin-bets" class="bet-list"></div>
+        </section>
+    </div>
+</main>
+
+<script src="store.js"></script>
+<script src="ui.js"></script>
+<script src="nav.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

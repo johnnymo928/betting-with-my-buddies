@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Place a Bet &middot; Betting With My Buddies</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <span class="live-dot" aria-hidden="true"></span>
+        <div><h1>Betting With My Buddies</h1><p class="tagline">Place a bet</p></div>
+    </div>
+</header>
+
+<main class="dashboard page-narrow">
+    <section class="panel">
+        <div class="panel-head"><h2><span class="tag tag-gold">NEW</span> Add a Bet</h2></div>
+
+        <p class="empty" id="no-profiles" hidden>
+            No profiles yet. <a href="admin.html">Ask an admin to create one</a> first.
+        </p>
+
+        <form id="bet-form" class="form" novalidate>
+            <label>Who's betting?
+                <select id="profile" required></select>
+            </label>
+
+            <div class="seg" role="radiogroup" aria-label="Bet type">
+                <button type="button" class="on" data-type="single" role="radio" aria-checked="true">Single</button>
+                <button type="button" data-type="parlay" role="radio" aria-checked="false">Parlay</button>
+            </div>
+
+            <fieldset>
+                <legend id="legs-label">Your bet</legend>
+                <div id="legs"></div>
+                <button type="button" class="btn ghost" id="add-leg" hidden>+ Add leg</button>
+            </fieldset>
+
+            <div class="row">
+                <label>Stake ($)
+                    <input id="stake" type="number" min="0" step="0.01" inputmode="decimal" placeholder="10.00" required>
+                </label>
+                <label><span id="odds-label">Odds (American)</span>
+                    <input id="odds" type="number" step="1" inputmode="numeric" value="-110" required>
+                </label>
+            </div>
+
+            <p class="hint" id="payout-preview"></p>
+            <p class="form-error" id="form-error" role="alert"></p>
+            <button class="btn primary" type="submit">Place Bet</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <div class="panel-head">
+            <h2><span class="tag">BETS</span> All Bets</h2>
+            <select id="filter" aria-label="Filter by profile"></select>
+        </div>
+        <p class="hint">Mark each leg as hit (&#10003;), missed (&#10007;), or reset it. A parlay loses the moment any leg misses.</p>
+        <div id="bet-list" class="bet-list"></div>
+    </section>
+</main>
+
+<script src="store.js"></script>
+<script src="ui.js"></script>
+<script src="nav.js"></script>
+<script src="bet.js"></script>
+</body>
+</html>

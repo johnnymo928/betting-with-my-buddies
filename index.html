@@ -3,56 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Football Dashboard</title>
+    <title>Betting With My Buddies</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div class="dashboard">
-
-   <div class="header">
-   <span class="live-dot"></span>
-BETTING WITH MY BUDDIES
-
-    <div id="clock"></div>
-</div>
-<div class="scoreboards">
-    <div class="card">
-        <h2>🏈 NFL Scores & Lines</h2>
-<div id="nfl-status"></div>
-       <div id="nfl-container"></div>
-       
+<header class="topbar">
+    <div class="brand">
+        <span class="live-dot" aria-hidden="true"></span>
+        <div>
+            <h1>Betting With My Buddies</h1>
+            <p class="tagline">Scores &middot; Lines &middot; Slips</p>
+        </div>
     </div>
+    <div class="clock" id="clock" aria-live="off"></div>
+</header>
 
-    <div class="card">
-        <h2>🎓 NCAAF Scores & Lines</h2>
-<div id="ncaaf-status"></div>
-        <div id="ncaaf-container"></div>
-        
+<main class="dashboard">
+
+    <section class="panel" aria-labelledby="nfl-title">
+        <div class="panel-head">
+            <h2 id="nfl-title"><span class="tag">NFL</span> Scores &amp; Lines</h2>
+            <span class="page-info" id="nfl-status"></span>
+        </div>
+        <div class="games" id="nfl-container"></div>
+        <div class="dots" id="nfl-dots"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="ncaaf-title">
+        <div class="panel-head">
+            <h2 id="ncaaf-title"><span class="tag tag-alt">NCAAF</span> Scores &amp; Lines</h2>
+            <span class="page-info" id="ncaaf-status"></span>
+        </div>
+        <div class="games" id="ncaaf-container"></div>
+        <div class="dots" id="ncaaf-dots"></div>
+    </section>
+
+    <section class="panel panel-wide" aria-labelledby="bets-title">
+        <div class="panel-head">
+            <h2 id="bets-title"><span class="tag tag-gold">SLIP</span> Today's Bets</h2>
+            <span class="page-info"><span id="bets-count"></span> <a class="link" href="bet.html">+ Place a bet</a></span>
+        </div>
+        <div class="bet-list" id="bets"></div>
+    </section>
+
+</main>
+
+<footer class="ticker" aria-label="Live ticker">
+    <span class="ticker-label">LIVE</span>
+    <div class="ticker-track">
+        <div class="ticker-content" id="ticker-content">Loading scores&hellip;</div>
     </div>
-</div>
-    <div class="card">
-        <h2>🎯 Today's Bets</h2>
+</footer>
+<p class="version">Version 2.0</p>
 
-        <div class="bet">⏳ Texas Tech @ Cincinnati Over 48.5</div>
-        <div class="bet">⏳ Cincinnati +21.5</div>
-        <div class="bet">⏳ Indiana -2.5</div>
-        <div class="bet">⏳ LSU @ Auburn Over 44.5</div>
-        <div class="bet">⏳ Toledo +7.5</div>
-        <div class="bet">⏳ 5 Leg Parlay</div>
-    </div>
-<div class="version">
-    Version 1.0 Alpha Gold
-</div>
-    <div class="ticker">
-    <div class="ticker-content" id="ticker-content">
-    Loading NFL Ticker...
-</div>
-</div>
-
-</div>
-
+<script src="store.js"></script>
+<script src="ui.js"></script>
+<script src="nav.js"></script>
 <script src="script.js"></script>
-
 </body>
 </html>
