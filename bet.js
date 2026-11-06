@@ -187,6 +187,7 @@ function legRow() {
             };
         }
         // prop
+        if (league === "ncaaf") throw new Error("Player props aren't available for college football.");
         const pid = q(".f-player").value;
         if (!pid) throw new Error("Select a player for every prop.");
         needLine();
@@ -197,7 +198,13 @@ function legRow() {
         };
     };
 
-    q(".f-league").onchange = loadGames;
+    // Player props are not offered for college football (not legal in this state).
+    function syncKinds() {
+        const sel = q(".f-kind"), cur = sel.value;
+        const allowed = KINDS.filter(([k]) => !(k === "prop" && q(".f-league").value === "ncaaf"));
+        sel.innerHTML = opts(allowed, allowed.some(([k]) => k === cur) ? cur : "spread");
+    }
+    q(".f-league").onchange = () => { syncKinds(); loadGames(); };
     q(".f-game").onchange = pickGame;
     q(".f-kind").onchange = renderFields;
     q(".rm").onclick = () => { row.remove(); syncLegs(); };

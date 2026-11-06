@@ -14,3 +14,15 @@
     const bar = document.querySelector(".topbar");
     bar.insertBefore(nav, document.getElementById("clock"));
 })();
+
+/* Shared-database status badge */
+(function () {
+    if (!Store.sync.enabled) return;
+    const el = document.createElement("span");
+    el.className = "sync";
+    document.querySelector(".nav").after(el);
+    const LABEL = { connecting: "Connecting\u2026", synced: "Shared \u00b7 synced", error: "Offline \u00b7 retrying" };
+    const show = s => { el.textContent = LABEL[s] || s; el.dataset.state = s; };
+    show(Store.sync.status());
+    Store.sync.onStatus(show);
+})();

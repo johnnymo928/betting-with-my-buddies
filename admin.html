@@ -50,7 +50,7 @@
 
         <section class="panel">
             <div class="panel-head"><h2><span class="tag tag-alt">DATA</span> Backup &amp; Security</h2></div>
-            <p class="hint">Data lives in this browser only. Export a backup now and then, and use Import to move it to another device.</p>
+            <p class="hint">Profiles and bets are kept in the shared Google Sheet. Export a backup now and then. Import replaces everything in the sheet with the backup, so use it with care.</p>
             <div class="row-btns">
                 <button class="btn ghost" id="export">Export backup</button>
                 <label class="btn ghost file">Import backup<input id="import" type="file" accept="application/json" hidden></label>
@@ -77,6 +77,7 @@
     </div>
 </main>
 
+<script src="config.js"></script>
 <script src="store.js"></script>
 <script src="live.js"></script>
 <script src="ui.js"></script>

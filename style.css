@@ -435,3 +435,11 @@ optgroup{color:var(--muted);font-style:normal}
 .kb-sub{border-top:1px dashed var(--line)}
 .kb-sub summary{font-size:13px;color:var(--muted);padding:10px 0}
 .kb-body .table td,.kb-body .table th{vertical-align:top}
+
+/* ---------- Sync status badge ---------- */
+.sync{font-size:12px;font-weight:600;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.sync::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.sync[data-state=synced]{color:var(--green)}
+.sync[data-state=synced]::before{background:var(--green)}
+.sync[data-state=error]{color:var(--red)}
+.sync[data-state=error]::before{background:var(--red)}

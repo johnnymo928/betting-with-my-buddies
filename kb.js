@@ -28,7 +28,8 @@
             <table class="table"><thead><tr><th>Source</th><th>What it provides</th><th>Used by</th></tr></thead><tbody>
                 <tr><td>ESPN public API</td><td>Scores, game status, spread, over/under, rosters, player box scores</td><td>Home, bet builder, live grading</td></tr>
                 <tr><td>People using the site</td><td>Profiles, bets, stake, odds, manual results</td><td>Place Bet, Admin</td></tr>
-                <tr><td>Browser storage</td><td>Everything people enter, saved on that device only</td><td>All pages</td></tr>
+                <tr><td>Google Sheet (shared database)</td><td>Profiles and bets, shared by every device, on the <b>WebSite</b> tab</td><td>All pages, through <code>store.js</code></td></tr>
+                <tr><td>Browser storage</td><td>A local copy of the same data, so pages load instantly and keep working if the sheet can't be reached</td><td>All pages</td></tr>
             </tbody></table>`],
 
         ["ESPN endpoints", `
@@ -44,6 +45,7 @@
                 <tr><td>Game box scores</td><td>Cached 30 seconds</td><td><code>live.js</code></td></tr>
                 <tr><td>Game list for the bet builder</td><td>Cached 60 seconds</td><td><code>live.js</code></td></tr>
                 <tr><td>Rosters</td><td>Cached 6 hours</td><td><code>live.js</code></td></tr>
+                <tr><td>Profiles and bets from the Google Sheet</td><td>Every 30 seconds, and when the tab is shown again</td><td><code>store.js</code></td></tr>
             </tbody></table>
             <p class="hint">If a feed fails, the page keeps showing the last good data and retries on the next cycle.</p>`],
 
@@ -58,7 +60,7 @@
                 <tr><td>Spread</td><td>League, game ID, team ID, opponent ID, line</td></tr>
                 <tr><td>Moneyline</td><td>League, game ID, team ID, opponent ID</td></tr>
                 <tr><td>Total</td><td>League, game ID, home and away IDs, over/under, line</td></tr>
-                <tr><td>Player prop</td><td>League, game ID, ESPN player ID, stat, over/under, line</td></tr>
+                <tr><td>Player prop (NFL only)</td><td>League, game ID, ESPN player ID, stat, over/under, line. Not offered for college football because it isn't legal in this state</td></tr>
                 <tr><td>Custom</td><td>Plain text only. Never graded automatically</td></tr>
             </tbody></table>
             <p>A <b>parlay</b> is one bet with several legs and one stake and odds. It loses as soon as any leg loses and wins only when every leg wins. Insights uses this to show which legs killed parlays.</p>`],
@@ -81,25 +83,36 @@
             </ol>
             <p class="hint">Grading runs in the browser, so a bet only updates while someone has Home or Place Bet open on the device that holds it.</p>`],
 
-        ["Where data is stored", `
-            <p>All profiles and bets are saved in this browser's <b>localStorage</b> under the key ${code("bwmb.v1")}. The admin PIN defaults to <b>0827</b> (set as <code>DEFAULT_PIN</code> in <code>store.js</code>). Changing it on this page saves a simple hash of the new PIN in that same storage on this device only. Only the unlocked state for the current tab uses sessionStorage.</p>
+        ["Shared database: the Google Sheet", `
+            <p>Profiles and bets are stored in a Google Sheet, on a single tab named <b>WebSite</b>. This is a <b>temporary</b> database until a real one replaces it. All reads and writes go through <code>store.js</code>, so swapping it later means changing that one file.</p>
+            <table class="table"><thead><tr><th>Step</th><th>What happens</th></tr></thead><tbody>
+                <tr><td>Saving</td><td>Every new bet, profile, grade or delete is sent to the sheet through a Google Apps Script web app (URL and password in <code>config.js</code>). It retries up to 3 times if the sheet doesn't answer.</td></tr>
+                <tr><td>Loading</td><td>When a page opens, then every 30 seconds and whenever the tab comes back into view, the page downloads everything from the sheet and refreshes what you see.</td></tr>
+                <tr><td>First connection</td><td>If the sheet is empty, whatever is already saved in this browser is uploaded to it once.</td></tr>
+                <tr><td>Deletes</td><td>Something deleted on one device disappears from the others at their next refresh. Deleting a profile deletes its bets.</td></tr>
+                <tr><td>Conflicts</td><td>If two people change the same bet at the same moment, the last save wins.</td></tr>
+            </tbody></table>
+            <p>The badge in the nav bar shows the connection: <b>Shared &middot; synced</b>, <b>Connecting</b>, or <b>Offline &middot; retrying</b>. If the sheet can't be reached, the site keeps working from the local copy.</p>
             <ul class="kb-list">
-                <li><b>Not shared:</b> each device has its own data. Other people do not see your bets unless you move a backup over.</li>
-                <li><b>Can be lost:</b> clearing browser data, or using a private window, erases it. Export a backup regularly (Backup &amp; Security above).</li>
-                <li><b>One file to change later:</b> all reads and writes go through <code>store.js</code>, so moving to a shared database such as Firebase means rewriting that file only.</li>
+                <li><b>The WebSite tab:</b> the script writes its own headers and rebuilds the tab after every change. The hidden JSON column is the real data. Don't type on that tab or edit the other columns, because edits are overwritten.</li>
+                <li><b>Changing the script:</b> after editing it in Apps Script, use Deploy &rsaquo; Manage deployments &rsaquo; edit &rsaquo; New version. Saving alone does not update the live web app. A copy is kept in <code>sheet-setup/Code.gs</code>.</li>
+                <li><b>Local copy:</b> each browser also keeps a copy in localStorage under ${code("bwmb.v1")}. Clearing browser data is safe, since it reloads from the sheet.</li>
+                <li><b>Admin PIN:</b> defaults to <b>0827</b> (<code>DEFAULT_PIN</code> in <code>store.js</code>). A PIN changed on the Admin page is saved on that device only. The unlocked state lasts for the current tab.</li>
             </ul>`],
 
         ["Private stakes and the admin PIN", `
             <p>A bet marked <b>private</b> hides its stake, payout and profit on every page. It still counts toward records and hit rates, but is left out of profit, ROI, at-risk and best-win totals so the amount can't be worked out.</p>
-            <p>The admin PIN and the private setting are <b>light protection</b>. The site is public and the data sits in the browser, so someone with access to that browser can still read the raw values. True privacy needs a server-side backend with real sign-in.</p>`],
+            <p>Private stakes are stored in the sheet, so <b>anyone who can open the sheet can see them</b>. Keep its sharing restricted. The script leaves the stake out of what it sends to other devices, and a device that placed a private bet keeps its own copy.</p>
+            <p>The admin PIN, the sheet password in <code>config.js</code> and the private setting are all <b>light protection</b>. The site and <code>config.js</code> are public, so someone determined could find the password and read or write the sheet's data. Real privacy needs a proper backend with sign-in.</p>`],
 
         ["Known limits", `
             <ul class="kb-list">
                 <li>ESPN's endpoints are unofficial and may change or lag during games.</li>
-                <li>Only NFL and FBS college football are covered.</li>
+                <li>Only NFL and FBS college football are covered. College football has spread, moneyline and total bets only, with no player props.</li>
                 <li>Pushes and voided legs are not supported, so they are left pending for a manual decision.</li>
                 <li>No live odds movement, and no lines from individual sportsbooks.</li>
                 <li>No sign-in, so profiles are chosen from a dropdown and are not tied to a person.</li>
+                <li>The sheet refreshes every 30 seconds, so another person's change can take up to that long to appear. Google also limits how fast a script can be called, which is fine for a small group.</li>
             </ul>`],
 
         ["Files in this site", `
@@ -108,7 +121,9 @@
                 <tr><td><code>bet.html</code>, <code>bet.js</code></td><td>Dropdown bet builder and bet list</td></tr>
                 <tr><td><code>insights.html</code>, <code>insights.js</code></td><td>Stats, leaderboard, parlay and bet-type analysis</td></tr>
                 <tr><td><code>admin.html</code>, <code>admin.js</code>, <code>kb.js</code></td><td>PIN gate, profiles, backups, this Knowledge Base</td></tr>
-                <tr><td><code>store.js</code></td><td>All saving and loading of profiles and bets, plus payout math</td></tr>
+                <tr><td><code>store.js</code></td><td>All saving and loading of profiles and bets, sheet sync, plus payout math</td></tr>
+                <tr><td><code>config.js</code></td><td>The Google Sheet web app URL and password</td></tr>
+                <tr><td><code>sheet-setup/Code.gs</code></td><td>The Apps Script that runs inside the sheet (a copy, not used by the site)</td></tr>
                 <tr><td><code>live.js</code></td><td>ESPN games, rosters, box scores and automatic grading</td></tr>
                 <tr><td><code>ui.js</code>, <code>nav.js</code>, <code>style.css</code></td><td>Shared bet card, nav bar, styling</td></tr>
             </tbody></table>`]
