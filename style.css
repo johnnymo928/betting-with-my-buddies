@@ -619,3 +619,14 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
 @media (max-width:860px){.brand h1{align-items:center}.logo-mark{height:68px}}
 .brand h1{gap:7px}
 .brand h1 .l1::after{content:"";display:block;height:2px;margin-top:7px;border-radius:2px;background:linear-gradient(90deg,var(--gold),transparent)}
+
+/* wordmark polish: slanted, chunky, gold gradient with a hard shadow */
+.brand h1{transform:skewX(-8deg);transform-origin:left bottom;gap:4px}
+.brand h1 .l1{font-size:.78em;letter-spacing:.2em;color:#fff;text-shadow:0 2px 0 #000,0 0 14px rgba(62,166,255,.45)}
+.brand h1 .l1::after{height:3px;margin-top:6px;background:linear-gradient(90deg,var(--gold),#ff7a1a 60%,transparent)}
+.brand h1 .l2{font-size:2.05em;letter-spacing:.07em;line-height:.88;text-shadow:none;
+    background:linear-gradient(180deg,#fff0b3 0%,#ffcf4d 38%,#f5a623 70%,#d9770e 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 2px 0 #5c2e00) drop-shadow(0 5px 8px rgba(0,0,0,.55))}
+.brand .tagline{letter-spacing:.24em}
+@media (max-width:860px){.brand h1{transform-origin:center bottom}}
