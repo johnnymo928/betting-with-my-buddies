@@ -650,3 +650,4 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
     .brand h1{font-size:clamp(24px,3.2vw,32px)}
     .brand > div{margin-left:-44px}
 }
+.brand h1 .l2{font-size:1.5em}
