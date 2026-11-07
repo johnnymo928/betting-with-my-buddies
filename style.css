@@ -611,3 +611,9 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
 
 .sport-bar{grid-column:1 / -1;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted,#9aa)}
 .sport-bar select{background:var(--panel,#1b222c);color:inherit;border:1px solid var(--line,#2a3340);border-radius:8px;padding:8px 12px;font:inherit;font-weight:600}
+
+.logo-mark{height:70px;width:auto;flex:none;filter:drop-shadow(0 4px 10px rgba(0,0,0,.45))}
+.brand h1{display:flex;flex-direction:column;gap:2px}
+.brand h1 .l1{font-size:.62em;letter-spacing:.14em;color:var(--text);line-height:1}
+.brand h1 .l2{font-size:1.45em;letter-spacing:.06em;color:var(--gold);line-height:.9;text-shadow:0 2px 0 rgba(0,0,0,.35)}
+@media (max-width:860px){.brand h1{align-items:center}.logo-mark{height:58px}}
