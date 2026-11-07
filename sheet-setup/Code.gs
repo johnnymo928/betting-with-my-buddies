@@ -16,7 +16,7 @@ const SECRET = "CHANGE_ME";   // must match SHEET_SECRET in the site's config.js
 const TAB = "WebSite";
 
 const HEADERS = [
-  "Record",      // A  profile | bet
+  "Record",      // A  profile | bet | comment | pick
   "ID",          // B
   "Player",      // C  profile name (for a bet row, who placed it)
   "Placed",      // D
@@ -47,11 +47,12 @@ function doGet(e) {
     c.stake = null;
     return c;
   });
+  all.api = 2;          // 2 = also stores comments and pool picks (older scripts don't send this)
   return json_(all);
 }
 
 // Body is JSON sent as text/plain (avoids a CORS preflight):
-//   { secret, action: "upsert", kind: "bet"|"profile", record }
+//   { secret, action: "upsert", kind: "bet"|"profile"|"comment"|"pick", record }
 //   { secret, action: "remove", kind, id }
 //   { secret, action: "replaceAll", profiles: [], bets: [] }
 function doPost(e) {
@@ -81,10 +82,26 @@ function doPost(e) {
   lock.waitLock(20000);
   try {
     let all = readAll_();
-    const list = function (kind) { return kind === "profile" ? all.profiles : all.bets; };
+    const list = function (kind) {
+      return kind === "profile" ? all.profiles : kind === "comment" ? all.comments : kind === "pick" ? all.picks : all.bets;
+    };
 
     if (body.action === "upsert") {
+      if (["profile", "bet", "comment", "pick"].indexOf(body.kind) < 0 || !body.record || !body.record.id) return json_({ error: "bad_record" });
       const l = list(body.kind), i = l.findIndex(function (r) { return r.id === body.record.id; });
+      if (body.kind === "comment") {            // short, and tied to a real bet and profile
+        body.record.text = String(body.record.text || "").trim().slice(0, 200);
+        if (!body.record.text || !body.record.betId || !body.record.profileId) return json_({ error: "bad_record" });
+      }
+      if (body.kind === "pick" && (!body.record.profileId || !body.record.eventId || !body.record.teamId)) return json_({ error: "bad_record" });
+      // betting closes at kickoff: refuse a new bet that was placed after any of its games started
+      if (body.kind === "bet" && i < 0) {
+        const late = (body.record.legs || []).some(function (lg) {
+          const st = lg.pick && lg.pick.start ? Date.parse(lg.pick.start) : NaN;
+          return isFinite(st) && Number(body.record.createdAt) >= st;
+        });
+        if (late) return json_({ error: "kickoff" });
+      }
       // a device that can't see a private stake sends null: keep the stake we already have
       if (body.kind === "bet" && body.record.private && body.record.stake == null && i >= 0) body.record.stake = l[i].stake;
       // removing or restoring a bet (soft delete) is admin-only; so is overwriting a removed bet
@@ -94,14 +111,25 @@ function doPost(e) {
       }
       if (i >= 0) l[i] = body.record; else l.push(body.record);
     } else if (body.action === "remove") {
-      if (body.kind === "profile") {            // deleting a profile deletes its bets
+      if (body.kind === "profile") {            // deleting a profile deletes its bets, comments and picks
         all.profiles = all.profiles.filter(function (p) { return p.id !== body.id; });
+        const gone = {};
+        all.bets.forEach(function (b) { if (b.profileId === body.id) gone[b.id] = true; });
         all.bets = all.bets.filter(function (b) { return b.profileId !== body.id; });
+        all.comments = all.comments.filter(function (c) { return c.profileId !== body.id && !gone[c.betId]; });
+        all.picks = all.picks.filter(function (p) { return p.profileId !== body.id; });
+      } else if (body.kind === "comment") {
+        all.comments = all.comments.filter(function (c) { return c.id !== body.id; });
+      } else if (body.kind === "pick") {
+        all.picks = all.picks.filter(function (p) { return p.id !== body.id; });
       } else {
         all.bets = all.bets.filter(function (b) { return b.id !== body.id; });
+        all.comments = all.comments.filter(function (c) { return c.betId !== body.id; });
       }
     } else if (body.action === "replaceAll") {
-      all = { profiles: body.profiles || [], bets: body.bets || [] };
+      // comments and picks are only replaced when the backup carries them (an older browser's backup keeps what is here)
+      all = { profiles: body.profiles || [], bets: body.bets || [],
+              comments: body.comments || all.comments, picks: body.picks || all.picks };
     } else {
       return json_({ error: "unknown action" });
     }
@@ -120,13 +148,16 @@ function sheet_() {
 }
 
 function readAll_() {
-  const sh = sheet_(), out = { profiles: [], bets: [] };
+  const sh = sheet_(), out = { profiles: [], bets: [], comments: [], picks: [] };
   const n = sh.getLastRow();
   if (n < 2) return out;
   sh.getRange(2, 1, n - 1, JSON_COL).getValues().forEach(function (r) {
     const raw = r[JSON_COL - 1];
     if (!r[0] || !raw) return;
-    try { (r[0] === "profile" ? out.profiles : out.bets).push(JSON.parse(raw)); } catch (err) {}
+    try {
+      const list = r[0] === "profile" ? out.profiles : r[0] === "comment" ? out.comments : r[0] === "pick" ? out.picks : out.bets;
+      list.push(JSON.parse(raw));
+    } catch (err) {}
   });
   return out;
 }
@@ -153,6 +184,14 @@ function writeAll_(all) {
       b.legs.map(function (l) { return mark_(l.status) + l.text; }).join("\n"),
       b.stake, b.odds, win, s, s === "won" ? win : s === "lost" ? -b.stake : 0,
       b.private ? "yes" : "", now, JSON.stringify(b)]);
+  });
+
+  (all.comments || []).slice().sort(function (a, b) { return b.createdAt - a.createdAt; }).forEach(function (c) {
+    rows.push(["comment", c.id, names[c.profileId] || "Unknown", new Date(c.createdAt), "", clean_(c.text, 200), "", "", "", "", "", "", now, JSON.stringify(c)]);
+  });
+  (all.picks || []).slice().sort(function (a, b) { return b.createdAt - a.createdAt; }).forEach(function (p) {
+    rows.push(["pick", p.id, names[p.profileId] || "Unknown", new Date(p.createdAt), p.mode,
+      "Week " + p.week + ": " + (p.teamName || p.teamAbbr) + " (" + (p.gameLabel || "") + ")", "", "", "", "", "", "", now, JSON.stringify(p)]);
   });
 
   sh.clearContents();

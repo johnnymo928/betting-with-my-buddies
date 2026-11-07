@@ -6,10 +6,30 @@
                              records live progress, and auto-grades legs
    ============================================================ */
 const Live = (() => {
-    const BASE = "https://site.api.espn.com/apis/site/v2/sports/football/";
+    const API = "https://site.api.espn.com/apis/site/v2/sports/";
+    // Spreads, moneylines and totals work for every league. Player props are NFL only.
     const LEAGUES = {
-        nfl:   { path: "nfl", label: "NFL", board: "nfl/scoreboard" },
-        ncaaf: { path: "college-football", label: "NCAAF", board: "college-football/scoreboard?groups=80&limit=100" }
+        nfl:   { sport: "football",   path: "nfl",              label: "NFL",   board: "nfl/scoreboard" },
+        ncaaf: { sport: "football",   path: "college-football", label: "NCAAF", board: "college-football/scoreboard?groups=80&limit=100" },
+        nba:   { sport: "basketball", path: "nba",              label: "NBA",   board: "nba/scoreboard" },
+        nhl:   { sport: "hockey",     path: "nhl",              label: "NHL",   board: "nhl/scoreboard" },
+        mlb:   { sport: "baseball",   path: "mlb",              label: "MLB",   board: "mlb/scoreboard" }
+    };
+    const url = (lg, tail) => `${API}${LEAGUES[lg].sport}/${tail}`;
+    // ESPN's plain scoreboard for NBA, NHL and MLB shows one calendar day and flips late, so early in the day it can be
+    // yesterday's finals only. So these leagues are asked for each day separately (a range is refused) and merged:
+    // from yesterday to a couple of days ahead, which always includes tonight's and tomorrow's games.
+    const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+    const boards = (lg, back = 1, ahead = 2) => {
+        if (LEAGUES[lg].sport === "football") return [LEAGUES[lg].board];
+        const out = [];
+        for (let i = -back; i <= ahead; i++) { const d = new Date(); d.setDate(d.getDate() + i); out.push(`${LEAGUES[lg].board}?dates=${ymd(d)}&limit=100`); }
+        return out;
+    };
+    const events = async (lg, back, ahead) => {
+        const parts = await Promise.all(boards(lg, back, ahead).map(t => getJSON(url(lg, t), 60000)));
+        const seen = new Set();
+        return parts.flatMap(d => d.events || []).filter(e => !seen.has(e.id) && seen.add(e.id));
     };
 
     /* Each stat is a sum of box-score columns. [category, column label, sub-index]
@@ -48,15 +68,18 @@ const Live = (() => {
 
     /* ---------- Prop builder helpers ---------- */
     async function games(league) {
-        const d = await getJSON(BASE + LEAGUES[league].board, 60000);
-        return (d.events || [])
+        const all = await events(league);
+        return all
             .filter(e => e.status?.type?.state !== "post")
             .map(e => {
                 const comp = e.competitions[0];
                 const side = ha => comp.competitors.find(c => c.homeAway === ha)?.team || {};
                 const away = side("away"), home = side("home");
                 const odds = comp.odds?.[0];
-                const m = /^(\S+)\s+(-?\d+(?:\.\d+)?)$/.exec(odds?.details || "");   // e.g. "KC -6.5"
+                // ESPN's "details" is the point spread in football and basketball. In hockey and baseball it is a
+                // moneyline (e.g. "NYY -150"), which would be wrong to prefill as a spread, so it is ignored there.
+                const m = ["hockey", "baseball"].includes(LEAGUES[league].sport) ? null
+                    : /^(\S+)\s+(-?\d+(?:\.\d+)?)$/.exec(odds?.details || "");   // e.g. "KC -6.5"
                 const tm = t => ({
                     id: String(t.id), abbr: t.abbreviation || t.shortDisplayName,
                     name: t.shortDisplayName || t.displayName, full: t.displayName
@@ -72,7 +95,7 @@ const Live = (() => {
     }
 
     async function roster(league, team) {
-        const d = await getJSON(`${BASE}${LEAGUES[league].path}/teams/${team.id}/roster`, 6 * 3600000);
+        const d = await getJSON(url(league, `${LEAGUES[league].path}/teams/${team.id}/roster`), 6 * 3600000);
         const out = [];
         (d.athletes || []).forEach(g => {
             if (!["offense", "defense", "specialTeam"].includes(g.position)) return;
@@ -174,7 +197,7 @@ const Live = (() => {
         const summaries = {};
         await Promise.all(keys.map(async k => {
             const [lg, id] = k.split(":");
-            try { summaries[k] = await getJSON(`${BASE}${LEAGUES[lg].path}/summary?event=${id}`, 30000); }
+            try { summaries[k] = await getJSON(url(lg, `${LEAGUES[lg].path}/summary?event=${id}`), 30000); }
             catch (e) { console.error("live", k, e); }
         }));
 
@@ -190,5 +213,5 @@ const Live = (() => {
         return targets.length;
     }
 
-    return { LEAGUES, STATS, statDef, games, roster, refresh, progress, gradePick };
+    return { LEAGUES, STATS, statDef, games, roster, refresh, progress, gradePick, getJSON, url, events };
 })();

@@ -52,6 +52,9 @@ function legRow() {
                 <select class="f-league">
                     <option value="nfl">NFL</option>
                     <option value="ncaaf">College Football</option>
+                    <option value="nba">NBA Basketball</option>
+                    <option value="nhl">NHL Hockey</option>
+                    <option value="mlb">MLB Baseball</option>
                 </select>
             </label>
             <label class="f-game-wrap">Game <select class="f-game"></select></label>
@@ -67,18 +70,23 @@ function legRow() {
     let token = 0;                                // ignores stale odds responses
 
     /* ----- games ----- */
+    // betting closes at kickoff: games that have started are listed but can't be picked
+    const locked = g => g.state !== "pre" || (g.start && Date.parse(g.start) <= Date.now());
     async function loadGames() {
         q(".f-game").innerHTML = `<option>Loading games&hellip;</option>`;
         st.games = []; st.game = null; st.loadErr = false;
         try { st.games = await Live.games(q(".f-league").value); }
         catch (e) { console.error(e); st.loadErr = true; }
         q(".f-game").innerHTML = st.games.length
-            ? st.games.map((g, i) => `<option value="${i}">${esc(g.label)} · ${esc(g.detail)}</option>`).join("")
+            ? st.games.map((g, i) => `<option value="${i}" ${locked(g) ? "disabled" : ""}>${esc(g.label)} · ${esc(g.detail)}${locked(g) ? " (betting closed)" : ""}</option>`).join("")
             : `<option value="">${st.loadErr ? "Couldn't load games. Try again in a moment." : "No upcoming games"}</option>`;
+        const open = st.games.findIndex(g => !locked(g));
+        if (open >= 0) q(".f-game").value = String(open);
         pickGame();
     }
     function pickGame() {
-        st.game = st.games[Number(q(".f-game").value)] || null;
+        const g = st.games[Number(q(".f-game").value)] || null;
+        st.game = g && !locked(g) ? g : null;       // nothing to pick if every game has kicked off
         st.players = [];
         renderFields();
     }
@@ -104,7 +112,7 @@ function legRow() {
         } else if (kind === "total") {
             box.innerHTML = `
                 <label>Pick <select class="f-side">${sideOpts}</select></label>
-                <label>Total points <input type="number" step="0.5" min="0" class="f-line" placeholder="48.5"></label>`;
+                <label>Total (points, goals or runs) <input type="number" step="0.5" min="0" class="f-line" placeholder="48.5"></label>`;
             const t = st.game?.line?.total;
             if (t != null) q(".f-line").value = t;
         } else if (kind === "prop") {
@@ -304,7 +312,7 @@ function legRow() {
         const g = st.game;
         if (!g) throw new Error("Pick a game for every leg.");
         const league = q(".f-league").value;
-        const base = { kind, league, eventId: g.id, gameLabel: g.label,
+        const base = { kind, league, eventId: g.id, gameLabel: g.label, start: g.start,
             ...(row._price != null ? { book: row._book, price: row._price, oddsAt: row._oddsAt } : {}) };
         const line = parseFloat(q(".f-line")?.value);
         const needLine = () => { if (!Number.isFinite(line)) throw new Error("Enter a line for every leg."); };
@@ -325,7 +333,7 @@ function legRow() {
             };
         }
         // prop
-        if (league === "ncaaf") throw new Error("Player props aren't available for college football.");
+        if (league !== "nfl") throw new Error("Player props are only available for the NFL.");
         const pid = q(".f-player").value;
         if (!pid) throw new Error("Select a player for every prop.");
         needLine();
@@ -345,7 +353,7 @@ function legRow() {
     // Player props are not offered for college football (not legal in this state).
     function syncKinds() {
         const sel = q(".f-kind"), cur = sel.value;
-        const allowed = KINDS.filter(([k]) => !(k === "prop" && q(".f-league").value === "ncaaf"));
+        const allowed = KINDS.filter(([k]) => !(k === "prop" && q(".f-league").value !== "nfl"));   // props: NFL only
         sel.innerHTML = opts(allowed, allowed.some(([k]) => k === cur) ? cur : "spread");
     }
     q(".f-league").onchange = () => { syncKinds(); loadGames(); };
@@ -431,6 +439,15 @@ form.onsubmit = e => {
 
 /* ---------- Bet list ---------- */
 function renderBets() {
+    const drafts = [...document.querySelectorAll(".cmt-in")].map(i => [i.dataset.bet, i.value, i === document.activeElement]).filter(d => d[1] || d[2]);
+    drawBets();
+    drafts.forEach(([id, value, focus]) => {
+        const i = document.querySelector(`.cmt-in[data-bet="${id}"]`);
+        if (!i) return;
+        i.value = value; if (focus) { i.focus(); i.setSelectionRange(value.length, value.length); }
+    });
+}
+function drawBets() {
     const f = $("filter").value;
     const list = Store.bets().filter(b => !f || b.profileId === f);
     const x = Store.exposure(list);
@@ -441,7 +458,25 @@ function renderBets() {
         : `<div class="empty">No bets yet.</div>`;
 }
 $("filter").onchange = renderBets;
+function postComment(btn) {
+    const id = btn.dataset.bet, card = btn.closest(".bet-card");
+    const input = card.querySelector(".cmt-in"), err = card.querySelector(".cmt-err");
+    const text = btn.dataset.act === "react" ? btn.dataset.emoji : input.value;
+    try {
+        if (!$("profile").value) throw new Error("Pick your profile at the top of the page first.");
+        Store.addComment({ betId: id, profileId: $("profile").value, text });
+        input.value = "";
+        renderBets();
+    } catch (e) { err.textContent = e.message; }
+}
+$("bet-list").addEventListener("keydown", e => {
+    if (e.key !== "Enter" || !e.target.classList.contains("cmt-in")) return;
+    e.preventDefault();
+    postComment(e.target.closest(".bet-card").querySelector("[data-act=comment]"));
+});
 $("bet-list").onclick = e => {
+    const c = e.target.closest("button[data-act=comment], button[data-act=react]");
+    if (c) return postComment(c);
     const b = e.target.closest("button[data-act=leg]");
     if (!b) return;
     Store.setLegStatus(b.dataset.bet, b.dataset.leg, b.dataset.status);

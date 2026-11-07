@@ -8,16 +8,25 @@ const ROTATE_MS = 7000;
 const BET_PAGE_SIZE = 4;
 const REFRESH_MS = 60000;
 
+const ESPN = "https://site.api.espn.com/apis/site/v2/sports/";
 const FEEDS = {
     nfl: {
-        url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+        urls: [["", ESPN + "football/nfl/scoreboard"]],
         container: "nfl-container", status: "nfl-status", dots: "nfl-dots",
         label: "NFL"
     },
     ncaaf: {
-        url: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?groups=80&limit=100",
+        urls: [["", ESPN + "football/college-football/scoreboard?groups=80&limit=100"]],
         container: "ncaaf-container", status: "ncaaf-status", dots: "ncaaf-dots",
         label: "NCAAF"
+    },
+    // basketball, hockey and baseball share one panel, shown only while any of them has games
+    more: {
+        // one request per league per day, worked out on every load so the dates roll over with the day (see Live.events)
+        leagues: ["nba", "nhl", "mlb"], back: 1, ahead: 0,
+        multi: true, hideOldFinalsHours: 14,
+        container: "more-container", status: "more-status", dots: "more-dots", panel: "more-panel",
+        label: "NBA, NHL and MLB", pageSize: 6
     }
 };
 
@@ -28,7 +37,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 /* ---------- Parse an ESPN event into something renderable ---------- */
-function parseEvent(event) {
+function parseEvent(event, lg) {
     const comp = event.competitions?.[0];
     if (!comp) return null;
 
@@ -46,11 +55,14 @@ function parseEvent(event) {
     });
 
     return {
+        lg: lg || "",
+        start: event.date || "",
         away: team(away),
         home: team(home),
         phase: st.state || "pre",                 // pre | in | post
         detail: st.shortDetail || "",
         spread: odds?.details || null,
+        lineLabel: ["NHL", "MLB"].includes(lg) ? "ML" : "LINE",       // hockey and baseball lines are moneylines
         total: odds?.overUnder ?? null
     };
 }
@@ -72,12 +84,13 @@ function gameCard(g) {
     const badge = { pre: "Upcoming", in: "Live", post: "Final" }[g.phase];
     return `
     <article class="game ${g.phase === "in" ? "is-live" : ""}">
+        ${g.lg ? `<span class="lg-tag">${esc(g.lg)}</span>` : ""}
         ${teamRow(g.away, g.phase, g.home.score)}
         ${teamRow(g.home, g.phase, g.away.score)}
         <div class="meta">
             <span class="badge ${g.phase}">${badge}</span>
             <span>${esc(g.detail)}</span>
-            ${g.spread ? `<span class="chip"><b>LINE</b>${esc(g.spread)}</span>` : ""}
+            ${g.spread ? `<span class="chip"><b>${g.lineLabel || "LINE"}</b>${esc(g.spread)}</span>` : ""}
             ${g.total ? `<span class="chip"><b>O/U</b>${esc(g.total)}</span>` : ""}
         </div>
     </article>`;
@@ -86,7 +99,9 @@ function gameCard(g) {
 function renderLeague(key) {
     const cfg = FEEDS[key], s = state[key];
     const box = $(cfg.container), status = $(cfg.status), dots = $(cfg.dots);
-    const pages = Math.max(1, Math.ceil(s.games.length / PAGE_SIZE));
+    const size = cfg.pageSize || PAGE_SIZE;
+    if (cfg.panel) $(cfg.panel).hidden = !s.games.length;       // the extra-sports panel only shows when there are games
+    const pages = Math.max(1, Math.ceil(s.games.length / size));
     if (s.page >= pages) s.page = 0;
 
     if (!s.games.length) {
@@ -98,9 +113,9 @@ function renderLeague(key) {
         return;
     }
 
-    const start = s.page * PAGE_SIZE;
-    box.innerHTML = s.games.slice(start, start + PAGE_SIZE).map(gameCard).join("");
-    status.textContent = `Games ${start + 1}–${Math.min(start + PAGE_SIZE, s.games.length)} of ${s.games.length}`;
+    const start = s.page * size;
+    box.innerHTML = s.games.slice(start, start + size).map(gameCard).join("");
+    status.textContent = `Games ${start + 1}–${Math.min(start + size, s.games.length)} of ${s.games.length}`;
 
     dots.innerHTML = pages > 1
         ? Array.from({ length: pages }, (_, i) =>
@@ -122,10 +137,21 @@ function startRotation() {
 async function loadLeague(key) {
     const s = state[key];
     try {
-        const res = await fetch(FEEDS[key].url);
-        if (!res.ok) throw new Error(res.status);
-        const data = await res.json();
-        s.games = (data.events || []).map(parseEvent).filter(Boolean);
+        const cfg = FEEDS[key];
+        const parts = await Promise.allSettled(cfg.leagues
+            ? cfg.leagues.map(async k => (await Live.events(k, cfg.back, cfg.ahead)).map(e => parseEvent(e, k.toUpperCase())).filter(Boolean))
+            : cfg.urls.map(async ([lg, u]) => {
+                const res = await fetch(u);
+                if (!res.ok) throw new Error(res.status);
+                const data = await res.json();
+                return (data.events || []).map(e => parseEvent(e, lg)).filter(Boolean);
+            }));
+        if (parts.every(p => p.status === "rejected")) throw parts[0].reason;
+        const order = { in: 0, pre: 1, post: 2 };               // live games first, then upcoming by kickoff, then finals
+        const oldFinal = FEEDS[key].hideOldFinalsHours ? Date.now() - FEEDS[key].hideOldFinalsHours * 3600000 : 0;
+        s.games = parts.filter(p => p.status === "fulfilled").flatMap(p => p.value)
+            .filter(g => !(g.phase === "post" && oldFinal && Date.parse(g.start) < oldFinal))      // yesterday's finals are not news
+            .sort((a, b) => FEEDS[key].multi ? (order[a.phase] - order[b.phase] || a.start.localeCompare(b.start)) : 0);
         s.error = false;
     } catch (err) {
         console.error(key, err);
@@ -209,7 +235,7 @@ function updateTicker() {
     for (const key of Object.keys(FEEDS)) {
         state[key].games.forEach(g => {
             const score = g.phase === "pre" ? g.detail : `${g.away.score}–${g.home.score} ${g.detail}`;
-            items.push(`${esc(g.away.name)} @ ${esc(g.home.name)} &middot; ${esc(score)}${g.spread ? " &middot; " + esc(g.spread) : ""}`);
+            items.push(`${g.lg ? esc(g.lg) + " " : ""}${esc(g.away.name)} @ ${esc(g.home.name)} &middot; ${esc(score)}${g.spread ? " &middot; " + esc(g.spread) : ""}`);
         });
     }
     const html = items.length

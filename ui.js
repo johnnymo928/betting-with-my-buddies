@@ -55,8 +55,23 @@ const UI = (() => {
             : status === "lost" ? `<b class="neg">${money(betProfit(bet))}</b>`
             : `<span>To win ${money(payout)}</span>`;
 
+        // trash talk: the Place Bet page shows the whole thread with a box to post; Home shows the latest line
+        const cs = typeof Store.comments === "function" ? Store.comments(bet.id) : [];
+        const line = c => `<div class="cmt"><b style="color:${esc(profile(c.profileId)?.color || "#aaa")}">${esc(profile(c.profileId)?.name || "Someone")}</b> ${esc(c.text)}</div>`;
+        const chat = editable ? `
+            <div class="thread">
+                ${cs.map(line).join("")}
+                <div class="cmt-form">
+                    ${["\uD83D\uDD25", "\uD83D\uDE02", "\uD83D\uDC80", "\uD83D\uDC4F"].map(e => `<button type="button" class="react" data-act="react" data-bet="${bet.id}" data-emoji="${e}" aria-label="React ${e}">${e}</button>`).join("")}
+                    <input class="cmt-in" data-bet="${bet.id}" maxlength="200" placeholder="Say something\u2026" aria-label="Comment">
+                    <button type="button" class="btn ghost sm" data-act="comment" data-bet="${bet.id}">Post</button>
+                </div>
+                <div class="cmt-err" data-err="${bet.id}" role="alert"></div>
+            </div>`
+            : cs.length ? `<div class="thread home">${line(cs[cs.length - 1])}${cs.length > 1 ? `<span class="muted">+${cs.length - 1} more</span>` : ""}</div>` : "";
+
         return `
-        <article class="bet-card ${status}">
+        <article class="bet-card ${status}" data-bet="${bet.id}">
             <header>
                 <span class="who"><i style="background:${esc(p?.color || "#888")}"></i>${esc(p?.name || "Unknown")}</span>
                 <span class="badge ${bet.type}">${bet.type === "parlay" ? bet.legs.length + "-Leg Parlay" : "Single"}</span>
@@ -68,6 +83,7 @@ const UI = (() => {
                 ${bet.type === "parlay" && status === "pending" ? `<span>${hit}/${bet.legs.length} hit</span>` : ""}
                 ${result}
             </footer>
+            ${chat}
         </article>`;
     }
 

@@ -147,6 +147,7 @@ function render() {
             ${near ? `<span class="badge pre">1 leg away</span>` : ""}
         </div>`;
     }).join("") : `<div class="empty">No busted parlays.</div>`;
+    if (window.renderWeekly) window.renderWeekly();     // weekly board, badges, shame, recap (weekly.js)
 }
 
 function bar(label, n, d, cls) {

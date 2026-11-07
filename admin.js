@@ -13,7 +13,7 @@ function showGate(msg) {
 }
 function showTools() {
     $("gate").hidden = true; $("tools").hidden = false;
-    renderProfiles(); renderBets();
+    renderProfiles(); renderBets(); renderComments();
     $("odds-panel").hidden = !Odds.enabled;                     // hidden while odds are off
     if (Odds.enabled) checkOdds();
 }
@@ -108,6 +108,22 @@ $("removed-bets").onclick = e => {
     const { restore, purge } = e.target.dataset;
     if (restore) { Store.restoreBet(restore); renderBets(); renderProfiles(); }
     else if (purge && confirm("Delete this bet forever? This can't be undone.")) { Store.deleteBet(purge); renderBets(); }
+};
+
+/* ---------- Comments ---------- */
+function renderComments() {
+    const list = Store.allComments().slice(0, 60);
+    $("admin-comments").innerHTML = list.length ? list.map(c => {
+        const p = Store.profile(c.profileId), bet = Store.bets().find(b => b.id === c.betId);
+        return `<div class="admin-comment">
+            <span><b style="color:${esc(p?.color || "#aaa")}">${esc(p?.name || "Someone")}</b> ${esc(c.text)}
+            <span class="muted">on ${esc(bet ? (bet.type === "parlay" ? bet.legs.length + "-leg parlay" : bet.legs[0].text) : "a removed bet")} \u00b7 ${new Date(c.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></span>
+            <button class="btn danger sm" data-del-comment="${c.id}">Remove</button></div>`;
+    }).join("") : `<div class="empty">No comments yet.</div>`;
+}
+$("admin-comments").onclick = e => {
+    const id = e.target.dataset.delComment; if (!id) return;
+    Store.removeComment(id); renderComments();
 };
 
 /* ---------- Odds ---------- */

@@ -10,7 +10,8 @@ const Store = (() => {
         try { return JSON.parse(localStorage.getItem(KEY)) || {}; }
         catch { return {}; }
     };
-    let db = Object.assign({ profiles: [], bets: [], pinHash: null, outbox: [] }, load());
+    const EMPTY = () => ({ profiles: [], bets: [], comments: [], picks: [], pinHash: null, outbox: [] });
+    let db = Object.assign(EMPTY(), load());
     const save = () => {
         try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { console.error(e); }
     };
@@ -26,10 +27,17 @@ const Store = (() => {
     let syncStatus = cfg ? "connecting" : "local", flushing = false;
     const statusListeners = [];
     const setStatus = s => { syncStatus = s; statusListeners.forEach(f => f(s)); };
-    const REFUSED = ["forbidden", "locked", "unauthorized", "bad_pin"];   // these will never succeed on retry
+    const REFUSED = ["forbidden", "locked", "unauthorized", "bad_pin", "kickoff", "bad_record"];   // these will never succeed on retry
+    // record kinds and where each one lives. Comments and pool picks need the newer script (api 2);
+    // until the sheet's script is updated they just wait on this device and the rest syncs as usual.
+    const LIST = { profile: "profiles", bet: "bets", comment: "comments", pick: "picks" };
+    const isExtra = k => k === "comment" || k === "pick";
+    let serverApi = 1, inflight = null;
 
     const box = () => (db.outbox ||= []);
     const pending = () => box().length;
+    // changes that can be sent right now (comments and picks wait while the sheet's script is the older version)
+    const waiting = () => box().filter(e => !isExtra(e.k) || serverApi >= 2).length;
 
     // Queue a change. Entries hold only a reference; the record itself is read when it is sent,
     // so the latest version always goes out and repeated edits collapse into one call.
@@ -37,16 +45,16 @@ const Store = (() => {
         if (!cfg) return;
         const e = body.action === "replaceAll" ? { a: "replaceAll" }
             : { a: body.action, k: body.kind, id: body.action === "upsert" ? body.record.id : body.id };
-        const dup = box().some((x, i) => x.a === e.a && x.k === e.k && x.id === e.id && !(i === 0 && flushing));
+        const dup = box().some(x => x.a === e.a && x.k === e.k && x.id === e.id && x !== inflight);
         if (!dup) { box().push(e); save(); }
         flush();
     }
     const pushBet = id => push({ action: "upsert", kind: "bet", record: { id } });
 
     function buildBody(e) {
-        if (e.a === "replaceAll") return { action: "replaceAll", profiles: db.profiles, bets: db.bets };
+        if (e.a === "replaceAll") return { action: "replaceAll", profiles: db.profiles, bets: db.bets, comments: db.comments, picks: db.picks };
         if (e.a === "remove") return { action: "remove", kind: e.k, id: e.id };
-        const record = (e.k === "profile" ? db.profiles : db.bets).find(r => r.id === e.id);
+        const record = db[LIST[e.k]].find(r => r.id === e.id);
         return record ? { action: "upsert", kind: e.k, record } : null;     // deleted locally since: nothing to send
     }
 
@@ -64,8 +72,11 @@ const Store = (() => {
         if (!cfg || flushing) return;
         flushing = true;
         try {
-            while (box().length) {
-                const body = buildBody(box()[0]);
+            for (;;) {
+                const i = box().findIndex(e => !isExtra(e.k) || serverApi >= 2);     // skip changes the sheet can't take yet
+                if (i < 0) break;
+                const entry = inflight = box()[i];
+                const body = buildBody(entry);
                 if (body) {
                     try {
                         await send(body);
@@ -73,7 +84,7 @@ const Store = (() => {
                         const s = new Set(db.syncedIds || []);
                         if (body.action === "upsert") s.add(body.record.id);
                         if (body.action === "remove") s.delete(body.id);
-                        if (body.action === "replaceAll") { s.clear(); [...body.profiles, ...body.bets].forEach(r => s.add(r.id)); }
+                        if (body.action === "replaceAll") { s.clear(); [...body.profiles, ...body.bets, ...(body.comments || []), ...(body.picks || [])].forEach(r => s.add(r.id)); }
                         db.syncedIds = [...s];
                     } catch (err) {
                         if (!REFUSED.includes(err.message)) {       // offline or a server hiccup: keep it all and retry later
@@ -82,32 +93,37 @@ const Store = (() => {
                         console.error("sync refused", err.message);   // refused for good: drop it, the next pull restores the truth
                     }
                 }
-                box().shift(); save();
+                box().splice(box().indexOf(entry), 1); save();
             }
             setStatus("synced");
-        } finally { flushing = false; }
+        } finally { flushing = false; inflight = null; }
     }
 
     async function pull() {
         if (!cfg || flushing) return;
-        if (pending()) { await flush(); if (pending()) return; }     // send our changes first, never overwrite them
+        if (waiting()) { await flush(); if (waiting()) return; }     // send our changes first, never overwrite them
         let remote;
         try {
             const res = await fetch(`${cfg.url}?secret=${encodeURIComponent(cfg.secret)}`);
             remote = await res.json();
             if (remote.error || !Array.isArray(remote.profiles)) throw new Error(remote.error || "bad response");
+            serverApi = remote.api || 1;
         } catch (e) { console.error("sync", e); setStatus("error"); return; }
-        if (flushing || pending()) return;               // a local change started while we were fetching
+        remote.comments ||= []; remote.picks ||= [];
+        if (flushing) return;
+        if (waiting()) { flush(); return; }            // a local change started while we were fetching (or the script was just updated): send, pull next time
 
-        const before = JSON.stringify([db.profiles, db.bets]);
+        const before = JSON.stringify([db.profiles, db.bets, db.comments, db.picks]);
         const synced = new Set(db.syncedIds || []);
-        const remoteEmpty = !remote.profiles.length && !remote.bets.length;
+        const remoteEmpty = !remote.profiles.length && !remote.bets.length && !remote.comments.length && !remote.picks.length;
 
         if (remoteEmpty && (db.profiles.length || db.bets.length)) {
             // sheet is empty: upload what this device has. Profiles can only be
             // created by an admin, so they are skipped unless the admin PIN is unlocked.
             if (adminPin !== null) db.profiles.forEach(p => push({ action: "upsert", kind: "profile", record: p }));
             db.bets.forEach(b => push({ action: "upsert", kind: "bet", record: b }));
+            db.comments.forEach(c => push({ action: "upsert", kind: "comment", record: c }));
+            db.picks.forEach(p => push({ action: "upsert", kind: "pick", record: p }));
         } else {
             const merge = (local, rem, kind) => {
                 const ids = new Set(rem.map(r => r.id));
@@ -128,11 +144,17 @@ const Store = (() => {
             };
             db.profiles = merge(db.profiles, remote.profiles, "profile");
             db.bets = merge(db.bets, remote.bets, "bet");
-            db.syncedIds = [...remote.profiles, ...remote.bets].map(r => r.id);
+            // a sheet that can't store these yet (older script) never deletes them: keep ours untouched
+            if (serverApi >= 2) {
+                db.comments = merge(db.comments, remote.comments, "comment");
+                db.picks = merge(db.picks, remote.picks, "pick");
+            }
+            db.syncedIds = [...remote.profiles, ...remote.bets, ...remote.comments, ...remote.picks].map(r => r.id);
         }
         save();
-        if (!pending() && !flushing) setStatus("synced");
-        if (JSON.stringify([db.profiles, db.bets]) !== before) window.dispatchEvent(new Event("storage"));
+        if (!waiting() && !flushing) setStatus("synced");
+        if (serverApi >= 2 && waiting()) flush();                      // the script was updated: send what was waiting
+        if (JSON.stringify([db.profiles, db.bets, db.comments, db.picks]) !== before) window.dispatchEvent(new Event("storage"));
     }
 
     const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -167,8 +189,11 @@ const Store = (() => {
     }
     function deleteProfile(id) {
         db.profiles = db.profiles.filter(p => p.id !== id);
+        const gone = new Set(db.bets.filter(b => b.profileId === id).map(b => b.id));
         db.bets = db.bets.filter(b => b.profileId !== id);
-        save(); push({ action: "remove", kind: "profile", id });   // the sheet also removes their bets
+        db.comments = db.comments.filter(c => c.profileId !== id && !gone.has(c.betId));
+        db.picks = db.picks.filter(p => p.profileId !== id);
+        save(); push({ action: "remove", kind: "profile", id });   // the sheet also removes their bets, comments and picks
     }
 
     /* ---------- Bets ----------
@@ -186,6 +211,9 @@ const Store = (() => {
         // a leg is a plain string (custom) or { text, pick } built from the dropdowns
         const clean = legs.map(l => typeof l === "string" ? { text: l.trim() } : { text: String(l.text).trim(), pick: l.pick })
             .filter(l => l.text);
+        // betting closes at kickoff (the sheet's script enforces the same rule)
+        if (clean.some(l => l.pick?.start && Date.parse(l.pick.start) <= Date.now()))
+            throw new Error("A game in this bet has already kicked off. Betting closes at kickoff.");
         if (type === "parlay" && clean.length < 2) throw new Error("A parlay needs at least 2 legs.");
         if (type === "single" && clean.length < 1) throw new Error("Describe your bet.");
         if (!(stake > 0)) throw new Error("Enter a stake above 0.");
@@ -196,6 +224,43 @@ const Store = (() => {
         };
         db.bets.push(bet); save(); pushBet(bet.id); return bet;
     }
+    /* ---------- Comments ---------- comment = { id, betId, profileId, text, createdAt } */
+    const comments = betId => db.comments.filter(c => c.betId === betId).sort((a, b) => a.createdAt - b.createdAt);
+    function addComment({ betId, profileId, text }) {
+        text = String(text || "").trim().slice(0, 200);
+        if (!profile(profileId)) throw new Error("Pick your profile first.");
+        if (!db.bets.some(b => b.id === betId && !b.deleted)) throw new Error("That bet is gone.");
+        if (!text) throw new Error("Write something first.");
+        const c = { id: uid(), betId, profileId, text, createdAt: Date.now() };
+        db.comments.push(c); save(); push({ action: "upsert", kind: "comment", record: c }); return c;
+    }
+    function removeComment(id) {                     // admin
+        db.comments = db.comments.filter(c => c.id !== id);
+        save(); push({ action: "remove", kind: "comment", id });
+    }
+    const allComments = () => db.comments.slice().sort((a, b) => b.createdAt - a.createdAt);
+
+    /* ---------- Pool picks ----------
+       pick = { id, mode: "survivor"|"pickem", profileId, season, week, eventId, teamId, teamAbbr, teamName,
+                gameLabel, start, createdAt }
+       survivor: one pick per player per week (id is per week, so choosing again replaces it)
+       pickem:   one pick per player per game */
+    const picks = () => db.picks.slice();
+    function setPick(r) {
+        if (!profile(r.profileId)) throw new Error("Pick your profile first.");
+        if (Date.parse(r.start) <= Date.now()) throw new Error("That game has already kicked off.");
+        const id = r.mode === "survivor" ? `sv:${r.profileId}:${r.season}:${r.week}` : `pe:${r.profileId}:${r.eventId}`;
+        const old = db.picks.find(p => p.id === id);
+        if (old && old.eventId !== r.eventId && Date.parse(old.start) <= Date.now())
+            throw new Error("Your pick for this week is locked: its game already kicked off.");
+        if (r.mode === "survivor" && db.picks.some(p => p.mode === "survivor" && p.profileId === r.profileId &&
+                p.season === r.season && p.week !== r.week && p.teamId === r.teamId))
+            throw new Error(`You already used ${r.teamName} in an earlier week.`);
+        const p = { ...r, id, createdAt: Date.now() };
+        db.picks = db.picks.filter(x => x.id !== id); db.picks.push(p);
+        save(); push({ action: "upsert", kind: "pick", record: p }); return p;
+    }
+
     // Manual changes lock a leg so live grading never overrides them;
     // resetting to pending hands it back to auto-grading.
     function setLegStatus(betId, legId, status, opts = {}) {
@@ -309,8 +374,9 @@ const Store = (() => {
     function importData(text) {
         const d = JSON.parse(text);
         if (!Array.isArray(d.profiles) || !Array.isArray(d.bets)) throw new Error("Not a valid backup file.");
-        db = { profiles: d.profiles, bets: d.bets, pinHash: db.pinHash || d.pinHash || null, syncedIds: db.syncedIds, outbox: db.outbox || [] };
-        save(); push({ action: "replaceAll", profiles: db.profiles, bets: db.bets });
+        db = { profiles: d.profiles, bets: d.bets, comments: d.comments || db.comments, picks: d.picks || db.picks,
+               pinHash: db.pinHash || d.pinHash || null, syncedIds: db.syncedIds, outbox: db.outbox || [] };
+        save(); push({ action: "replaceAll" });
     }
 
     if (cfg) {
@@ -325,8 +391,9 @@ const Store = (() => {
     return {
         sync: { enabled: !!cfg, status: () => syncStatus, pending, onStatus: f => statusListeners.push(f), pull },
         COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
+        comments, allComments, addComment, removeComment, picks, setPick,
         bets, removedBets, addBet, setLegStatus, recentHits, recentLosses, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
         adminLogin, adminLogout, isAdmin, adminPost, exportData, importData,
-        reload() { db = Object.assign({ profiles: [], bets: [], pinHash: null, outbox: [] }, load()); }
+        reload() { db = Object.assign(EMPTY(), load()); }
     };
 })();

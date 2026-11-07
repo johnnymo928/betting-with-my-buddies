@@ -22,3 +22,8 @@ const BOOKS = [
     ["hardrockbet", "Hard Rock Bet"],
     ["betrivers", "BetRivers"]
 ];
+
+/* Weekly pot on the Insights page. Set the amount each player puts in per week (for example 10).
+   The pot is buy-in x the players who had a bet settle that week, and the week's top profit wins it.
+   0 = no pot, just the weekly and season board. The site only tracks it; money moves between you. */
+const WEEKLY_BUYIN = 0;

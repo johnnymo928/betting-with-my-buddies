@@ -4,15 +4,14 @@
    never go stale. Relies on `$` and `esc` from admin.js.
    ============================================================ */
 window.renderKB = function () {
-    const BASE = "https://site.api.espn.com/apis/site/v2/sports/football/";
     const L = Live.LEAGUES;
     const code = s => `<code>${esc(s)}</code>`;
 
-    const endpointRows = Object.values(L).map(l => `
+    const endpointRows = Object.entries(L).map(([k, l]) => `
         <tr><td>${esc(l.label)}</td>
-            <td>${code(BASE + l.board)}</td>
-            <td>${code(BASE + l.path + "/summary?event={gameId}")}</td>
-            <td>${code(BASE + l.path + "/teams/{teamId}/roster")}</td></tr>`).join("");
+            <td>${code(Live.url(k, l.board))}</td>
+            <td>${code(Live.url(k, l.path + "/summary?event={gameId}"))}</td>
+            <td>${code(Live.url(k, l.path + "/teams/{teamId}/roster"))}</td></tr>`).join("");
 
     const groups = {};
     Live.STATS.forEach(s => (groups[s.group] ||= []).push(s));
@@ -142,6 +141,32 @@ window.renderKB = function () {
                 <li><b>Drafts:</b> if sending fails, the text stays in the box and is kept as a draft on that device.</li>
             </ul>`],
 
+        ["Weekly board, badges, Wall of Shame and recap", `
+            <p>The <b>Insights</b> page works these out from the bets already saved. Nothing extra is stored.</p>
+            <ul class="kb-list">
+                <li><b>Weeks</b> run Tuesday to Monday, matching the NFL week. A bet counts in the week it was <b>settled</b>, not the week it was placed. The first missed leg decides a loss; the last hit leg decides a win. Bets settled before settle times were recorded use their placed time.</li>
+                <li><b>Weekly board:</b> record and profit per player for the chosen week, with a crown for the leader (current week) or champion (past weeks). Private bets count in the record but not in the dollars. <b>Weeks won</b> counts completed weeks only.</li>
+                <li><b>Pot:</b> set <code>WEEKLY_BUYIN</code> in <code>config.js</code> (for example 10). The pot is the buy-in times the players who had a bet settle that week, and the week's top profit wins it (ties split). The site only tracks it; money moves between you. 0 turns it off.</li>
+                <li><b>Badges:</b> Hot hand / On fire (3 or 5 straight wins), Ice cold (3 straight losses), Best run, Weekly champ, Parlay king (most parlays cashed), So close (most parlays lost by one leg), Degen (most bets, 5 or more), Big win (biggest single win), Sharpshooter (best win rate with 5 or more settled bets).</li>
+                <li><b>Wall of Shame:</b> biggest loss, worst beat (a parlay that was one leg from cashing, most legs hit first), and most losses, for the chosen week, with a roast from <code>roasts.js</code>.</li>
+                <li><b>Recap:</b> a plain-text summary of the chosen week with a Copy button for the group chat. Code: <code>weekly.js</code>.</li>
+            </ul>`],
+
+        ["Comments on bets", `
+            <p>On the <b>Place Bet</b> page each bet has a short thread: type up to 200 characters and press Post or Enter, or tap an emoji. It posts as the profile chosen at the top of that page. <b>Home</b> shows the latest comment on each bet.</p>
+            <p>Comments are saved in the sheet on the <b>WebSite</b> tab as rows with Record = <code>comment</code>. Admins can remove any of them in <b>Admin &gt; Moderate Comments</b>. Removing a bet or a profile removes its comments.</p>`],
+
+        ["NFL pool (Survivor and Pick'em)", `
+            <p>The <b>Pool</b> page uses ESPN's NFL schedule for the current week and saves each pick as a <code>pick</code> row on the WebSite tab. Picks lock at each game's kickoff, and other players can't see a pick until its game starts.</p>
+            <ul class="kb-list">
+                <li><b>Survivor:</b> one team per week. If it loses or ties, you're out. A team can't be used twice in a season. Skipping a week (after your first pick) also knocks you out.</li>
+                <li><b>Pick'em:</b> pick the winner of every game. Standings count correct picks for the week and the season (a tie counts as not correct).</li>
+                <li><b>Results</b> come from ESPN's scoreboard and box score endpoints. Finished games are remembered on the device, so old weeks aren't fetched again. It only runs during the regular season.</li>
+            </ul>`],
+
+        ["Betting closes at kickoff", `
+            <p>A game that has started can't be picked on the Place Bet page, and a bet that includes one is refused. The site checks the device clock, and the sheet's script also refuses a new bet whose placed time is at or after a leg's kickoff, so an out-of-date browser tab can't slip one through. A bet placed offline before kickoff is still accepted when it syncs later.</p>`],
+
         ["Private stakes and the admin PIN", `
             <p>A bet marked <b>private</b> hides its stake, payout and profit on every page. It still counts toward records and hit rates, but is left out of profit, ROI, at-risk and best-win totals so the amount can't be worked out.</p>
             <p>Private stakes are stored in the sheet, so <b>anyone who can open the sheet can see them</b>. Keep its sharing restricted. The script leaves the stake out of what it sends to other devices, and a device that placed a private bet keeps its own copy.</p>
@@ -150,7 +175,8 @@ window.renderKB = function () {
         ["Known limits", `
             <ul class="kb-list">
                 <li>ESPN's endpoints are unofficial and may change or lag during games.</li>
-                <li>Only NFL and FBS college football are covered. College football has spread, moneyline and total bets only, with no player props.</li>
+                <li>Football (NFL and FBS college), NBA, NHL and MLB are covered. Only the NFL has player props. The other leagues have spread, moneyline and total bets, graded from final scores.</li>
+                <li>The pool and the kickoff lock use the device and ESPN clocks, so they are only as accurate as those. A determined person could still change a browser's data, because there is no sign-in.</li>
                 <li>Pushes and voided legs are not supported, so they are left pending for a manual decision.</li>
                 <li>Sportsbook lines depend on the free plan's monthly credits and on which books The Odds API covers for your state. Odds are one snapshot per game day, so there is no live odds movement.</li>
                 <li>No sign-in, so profiles are chosen from a dropdown and are not tied to a person.</li>
@@ -162,7 +188,8 @@ window.renderKB = function () {
                 <tr><td><code>index.html</code>, <code>script.js</code></td><td>Home: scoreboards, ticker, active bets</td></tr>
                 <tr><td><code>bet.html</code>, <code>bet.js</code></td><td>Dropdown bet builder and bet list</td></tr>
                 <tr><td><code>feedback.html</code>, <code>feedback.js</code></td><td>Feedback page: ideas saved to the Feedback tab of the sheet</td></tr>
-                <tr><td><code>insights.html</code>, <code>insights.js</code></td><td>Stats, leaderboard, parlay and bet-type analysis</td></tr>
+                <tr><td><code>insights.html</code>, <code>insights.js</code>, <code>weekly.js</code></td><td>Stats, leaderboard, parlay and bet-type analysis; weekly board, badges, Wall of Shame, recap</td></tr>
+                <tr><td><code>pool.html</code>, <code>pool.js</code></td><td>NFL Survivor and Pick'em pool</td></tr>
                 <tr><td><code>admin.html</code>, <code>admin.js</code>, <code>kb.js</code></td><td>PIN gate, profiles, backups, this Knowledge Base</td></tr>
                 <tr><td><code>store.js</code></td><td>All saving and loading of profiles and bets, sheet sync, plus payout math</td></tr>
                 <tr><td><code>config.js</code></td><td>The Google Sheet web app URL and password</td></tr>

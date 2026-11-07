@@ -560,3 +560,51 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
 
 /* ---------- Running game clock on the bet slip ---------- */
 .prog.gameclock{display:block;font-variant-numeric:tabular-nums;font-weight:600}
+
+/* ---------- NBA / NHL / MLB panel ---------- */
+.game{position:relative}
+.lg-tag{position:absolute;top:8px;right:10px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--gold);opacity:.9}
+
+/* ---------- Weekly board, badges, shame, recap ---------- */
+.badge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.badge-card{background:var(--panel-2,rgba(255,255,255,.04));border:1px solid var(--line,rgba(255,255,255,.1));border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.badge-card .chips{display:flex;flex-wrap:wrap;gap:6px}
+.bdg{display:inline-flex;align-items:baseline;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(245,185,66,.12);border:1px solid rgba(245,185,66,.35);font-size:13px;font-weight:600}
+.bdg small{font-weight:400;opacity:.75;font-size:11px}
+.shame-row{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line,rgba(255,255,255,.08))}
+.shame-row:last-child{border-bottom:0}
+.shame-icon{font-size:26px;line-height:1}
+.recap{width:100%;box-sizing:border-box;background:rgba(0,0,0,.25);color:inherit;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:10px;padding:12px;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;resize:vertical}
+
+/* ---------- Comments on bets ---------- */
+.thread{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line,rgba(255,255,255,.12));display:flex;flex-direction:column;gap:4px;font-size:13px}
+.thread.home{margin-top:6px;padding-top:6px;font-size:12px}
+.cmt b{font-weight:700}
+.cmt-form{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+.cmt-form .cmt-in{flex:1 1 160px;min-width:0;padding:7px 10px;border-radius:8px;border:1px solid var(--line,rgba(255,255,255,.15));background:rgba(0,0,0,.2);color:inherit;font:inherit}
+.react{border:1px solid var(--line,rgba(255,255,255,.15));background:transparent;border-radius:999px;padding:3px 8px;cursor:pointer;font-size:15px}
+.react:hover{background:rgba(255,255,255,.08)}
+.cmt-err{color:var(--red,#f87171);font-size:12px;min-height:0}
+
+/* ---------- NFL pool ---------- */
+.pool-controls{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:8px}
+.pool-controls label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.pool-games{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px}
+.pool-game{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px}
+.pool-game.locked{opacity:.8}
+.pool-game .at{color:var(--muted);font-size:12px}
+.pool-game .when{grid-column:1 / -1;text-align:center;font-size:12px;color:var(--muted)}
+.team-pick{display:flex;align-items:center;gap:8px;justify-content:center;font:inherit;font-weight:600;color:var(--text);background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px 8px;cursor:pointer;min-height:44px}
+.team-pick img{width:24px;height:24px;object-fit:contain}
+.team-pick small{font-size:10px;color:var(--muted)}
+.team-pick:hover:not(:disabled){border-color:var(--accent)}
+.team-pick.on{border-color:var(--gold);background:rgba(245,185,66,.14)}
+.team-pick.on.won{border-color:var(--green);background:rgba(52,211,153,.14)}
+.team-pick.on.lost{border-color:var(--red);background:rgba(248,113,113,.14)}
+.team-pick:disabled{cursor:not-allowed;opacity:.55}
+.team-pick.on:disabled{opacity:1}
+
+.admin-comment{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.admin-comment:last-child{border-bottom:0}
+
+#more-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px}

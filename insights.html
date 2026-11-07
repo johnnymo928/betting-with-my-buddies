@@ -27,7 +27,36 @@
     </section>
 
     <section class="panel panel-wide">
-        <div class="panel-head"><h2><span class="tag tag-gold">BOARD</span> Leaderboard</h2></div>
+        <div class="panel-head">
+            <h2><span class="tag tag-gold">WEEK</span> <span id="wk-title">This week</span></h2>
+            <select id="week" aria-label="Choose week"></select>
+        </div>
+        <p class="hint" id="pot"></p>
+        <div class="table-wrap"><table class="table" id="wk-board"></table></div>
+        <p class="hint muted">Weeks run Tuesday to Monday. A bet counts in the week it was settled. Private bets are in the record but not the dollars.</p>
+    </section>
+
+    <section class="panel panel-wide">
+        <div class="panel-head"><h2><span class="tag tag-alt">BADGES</span> Streaks &amp; Badges</h2></div>
+        <div class="badge-grid" id="badges"></div>
+    </section>
+
+    <section class="panel panel-wide">
+        <div class="panel-head"><h2><span class="tag tag-gold">SHAME</span> Wall of Shame</h2></div>
+        <div id="shame"></div>
+    </section>
+
+    <section class="panel panel-wide">
+        <div class="panel-head">
+            <h2><span class="tag">RECAP</span> Weekly Recap</h2>
+            <button class="btn ghost sm" id="copy-recap" type="button">Copy for the group chat</button>
+        </div>
+        <textarea id="recap" class="recap" rows="14" readonly aria-label="Weekly recap text"></textarea>
+        <p class="hint" id="copy-msg" aria-live="polite"></p>
+    </section>
+
+    <section class="panel panel-wide">
+        <div class="panel-head"><h2><span class="tag tag-gold">BOARD</span> Leaderboard (all time)</h2></div>
         <div class="table-wrap"><table class="table" id="board"></table></div>
     </section>
 
@@ -61,7 +90,9 @@
 <script src="config.js"></script>
 <script src="store.js"></script>
 <script src="odds.js"></script>
+<script src="roasts.js"></script>
 <script src="nav.js"></script>
 <script src="insights.js"></script>
+<script src="weekly.js"></script>
 </body>
 </html>
