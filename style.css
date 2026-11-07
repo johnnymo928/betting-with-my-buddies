@@ -642,3 +642,11 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
 .brand h1 .l1::after{background:linear-gradient(270deg,var(--gold),#ff7a1a 60%,transparent)}
 .brand .tagline{text-align:right}
 @media (max-width:860px){.brand h1{align-items:flex-end}}
+
+/* header is 150px tall on desktop */
+@media (min-width:861px){
+    .topbar{height:150px;padding:10px 0}
+    .brand .logo-mark{height:84px}
+    .brand h1{font-size:clamp(24px,3.2vw,32px)}
+    .brand > div{margin-left:-44px}
+}
