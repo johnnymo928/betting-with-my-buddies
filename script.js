@@ -20,17 +20,23 @@ const FEEDS = {
         container: "ncaaf-container", status: "ncaaf-status", dots: "ncaaf-dots",
         label: "NCAAF"
     },
-    // basketball, hockey and baseball share one panel, shown only while any of them has games
+    // basketball, hockey or baseball: one panel, showing whichever sport is picked in the dropdown
     more: {
-        // one request per league per day, worked out on every load so the dates roll over with the day (see Live.events)
-        leagues: ["nba", "nhl", "mlb"], back: 1, ahead: 0,
+        // one request per day for the picked league, worked out on every load so the dates roll over (see Live.events)
+        leagues: ["nba"], back: 1, ahead: 0,
         multi: true, hideOldFinalsHours: 14,
         container: "more-container", status: "more-status", dots: "more-dots", panel: "more-panel",
-        label: "NBA, NHL and MLB", pageSize: 6
+        label: "NBA", pageSize: 6
     }
 };
 
 const state = {};   // per-league: { games, page, timer, error }
+
+/* ---------- Sport picker: football (NFL + NCAAF panels) or one of NBA / NHL / MLB ---------- */
+let sport = "football";
+try { const v = localStorage.getItem("bwmb.sport"); if (["football", "nba", "nhl", "mlb"].includes(v)) sport = v; } catch (e) {}
+const isActive = key => key === "more" ? sport !== "football" : sport === "football";
+if (sport !== "football") { FEEDS.more.leagues = [sport]; FEEDS.more.label = sport.toUpperCase(); }
 const $ = id => document.getElementById(id);
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
@@ -100,7 +106,7 @@ function renderLeague(key) {
     const cfg = FEEDS[key], s = state[key];
     const box = $(cfg.container), status = $(cfg.status), dots = $(cfg.dots);
     const size = cfg.pageSize || PAGE_SIZE;
-    if (cfg.panel) $(cfg.panel).hidden = !s.games.length;       // the extra-sports panel only shows when there are games
+    $(cfg.container).closest("section").hidden = !isActive(key);   // only the picked sport's panel(s) show
     const pages = Math.max(1, Math.ceil(s.games.length / size));
     if (s.page >= pages) s.page = 0;
 
@@ -136,6 +142,7 @@ function startRotation() {
 /* ---------- Data ---------- */
 async function loadLeague(key) {
     const s = state[key];
+    if (!isActive(key)) return;
     try {
         const cfg = FEEDS[key];
         const parts = await Promise.allSettled(cfg.leagues
@@ -233,7 +240,7 @@ let lastTicker = "";
 function updateTicker() {
     const items = [...hitItems(), ...lossItems()];
     for (const key of Object.keys(FEEDS)) {
-        state[key].games.forEach(g => {
+        if (isActive(key)) state[key].games.forEach(g => {
             const score = g.phase === "pre" ? g.detail : `${g.away.score}–${g.home.score} ${g.detail}`;
             items.push(`${g.lg ? esc(g.lg) + " " : ""}${esc(g.away.name)} @ ${esc(g.home.name)} &middot; ${esc(score)}${g.spread ? " &middot; " + esc(g.spread) : ""}`);
         });
@@ -412,6 +419,20 @@ for (const key of Object.keys(FEEDS)) {
     });
 }
 startRotation();
+
+$("sport-pick").value = sport;
+$("sport-pick").addEventListener("change", e => {
+    sport = e.target.value;
+    try { localStorage.setItem("bwmb.sport", sport); } catch (err) {}
+    if (sport !== "football") {
+        FEEDS.more.leagues = [sport]; FEEDS.more.label = sport.toUpperCase();
+        Object.assign(state.more, { games: [], page: 0, error: false, loaded: false });
+    }
+    $("more-tag").textContent = sport.toUpperCase();
+    for (const key of Object.keys(FEEDS)) { renderLeague(key); loadLeague(key); }
+    updateTicker();
+});
+$("more-tag").textContent = sport.toUpperCase();
 
 renderBets();
 liveTick();

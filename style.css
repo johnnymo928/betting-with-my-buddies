@@ -608,3 +608,6 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
 .admin-comment:last-child{border-bottom:0}
 
 #more-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px}
+
+.sport-bar{grid-column:1 / -1;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted,#9aa)}
+.sport-bar select{background:var(--panel,#1b222c);color:inherit;border:1px solid var(--line,#2a3340);border-radius:8px;padding:8px 12px;font:inherit;font-weight:600}

@@ -32,6 +32,16 @@
 
 <main class="dashboard">
 
+    <div class="sport-bar">
+        <label for="sport-pick">Sport</label>
+        <select id="sport-pick" aria-label="Choose a sport">
+            <option value="football">Football (NFL + College)</option>
+            <option value="nba">NBA Basketball</option>
+            <option value="nhl">NHL Hockey</option>
+            <option value="mlb">MLB Baseball</option>
+        </select>
+    </div>
+
     <section class="panel" aria-labelledby="nfl-title">
         <div class="panel-head">
             <h2 id="nfl-title"><span class="tag">NFL</span> Scores &amp; Lines</h2>
@@ -52,7 +62,7 @@
 
     <section class="panel panel-wide" id="more-panel" aria-labelledby="more-title" hidden>
         <div class="panel-head">
-            <h2 id="more-title"><span class="tag tag-gold">MORE</span> NBA &middot; NHL &middot; MLB</h2>
+            <h2 id="more-title"><span class="tag tag-gold" id="more-tag">NBA</span> Scores &amp; Lines</h2>
             <span class="page-info" id="more-status"></span>
         </div>
         <div class="games" id="more-container"></div>
