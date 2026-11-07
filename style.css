@@ -630,3 +630,10 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
     filter:drop-shadow(0 2px 0 #5c2e00) drop-shadow(0 5px 8px rgba(0,0,0,.55))}
 .brand .tagline{letter-spacing:.24em}
 @media (max-width:860px){.brand h1{transform-origin:center bottom}}
+
+/* wordmark sits on top of the right half of the balls */
+.brand{gap:0}
+.brand .logo-mark{position:relative;z-index:1;height:96px}
+.brand > div{position:relative;z-index:2;margin-left:-50px}
+.brand h1 .l1{text-shadow:0 2px 0 #000,0 0 6px #000,0 0 14px rgba(0,0,0,.8)}
+@media (max-width:860px){.brand{flex-direction:row}.brand .logo-mark{height:72px}.brand > div{margin-left:-38px}}
