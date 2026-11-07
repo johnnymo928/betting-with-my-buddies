@@ -112,7 +112,11 @@ const Live = (() => {
         const state = comp?.status?.type?.state || "pre";
         const detail = comp?.status?.type?.shortDetail || "";
         const score = id => Number(comp?.competitors?.find(c => String(c.id) === String(id))?.score);
-        const base = { kind: pick.kind, line: pick.line, state, detail };
+        // game clock + score for the bet slip, e.g. "4:12 - 3rd" and "BAL 10 – JAX 21"
+        const teams = (comp?.competitors || []).slice().sort((a, b) => (a.homeAway === "away" ? -1 : 1) - (b.homeAway === "away" ? -1 : 1));
+        const scoreLine = state === "pre" || teams.length < 2 ? "" :
+            teams.map(c => `${c.team?.abbreviation || "?"} ${c.score ?? 0}`).join(" – ");
+        const base = { kind: pick.kind, line: pick.line, state, detail, scoreLine };
         if (state === "pre") return { ...base, value: null, grade: "pending" };
         const final = state === "post";
 

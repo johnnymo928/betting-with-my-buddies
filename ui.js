@@ -24,11 +24,15 @@ const UI = (() => {
                 return l.manual === false ? `<span class="prog muted">Auto-graded${shown ? " · " + esc(shown) : ""}</span>` : "";
             }
             const pr = typeof Live !== "undefined" ? Live.progress[l.id] : null;
+            // running game clock + score, shown for every structured leg whose game has data
+            const clock = !pr ? "" : pr.state === "in"
+                ? `<span class="prog gameclock"><b class="live-tag">LIVE</b> ${esc(pr.detail)}${pr.scoreLine ? " · " + esc(pr.scoreLine) : ""}</span>`
+                : pr.state === "pre" ? (pr.detail ? `<span class="prog gameclock muted">Kickoff ${esc(pr.detail)}</span>` : "")
+                : `<span class="prog gameclock muted">${esc(pr.detail || "Final")}${pr.scoreLine ? " · " + esc(pr.scoreLine) : ""}</span>`;
             if (!pr || pr.state === "pre" || !pr.text)
-                return `<span class="prog muted">${pr?.state === "in" ? "Live" : "Waiting for game"}</span>`;
-            const live = pr.state === "in" ? `<b class="live-tag">LIVE</b> ` : "";
-            return `<span class="prog ${pr.cover === false ? "behind" : pr.cover ? "ahead" : ""}">
-                ${live}${esc(pr.text)} ${pr.detail ? `<span class="muted">· ${esc(pr.detail)}</span>` : ""}
+                return clock || `<span class="prog muted">Waiting for game</span>`;
+            return clock + `<span class="prog ${pr.cover === false ? "behind" : pr.cover ? "ahead" : ""}">
+                ${esc(pr.text)} 
                 ${pr.ratio != null ? `<span class="prog-bar"><i style="width:${Math.round(pr.ratio * 100)}%"></i></span>` : ""}
                 ${pr.note ? `<span class="prog warn">${esc(pr.note)}</span>` : ""}
             </span>`;

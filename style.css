@@ -557,3 +557,6 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
     .topbar.has-qr .qr{position:static}
     .topright{align-items:center;width:100%}
 }
+
+/* ---------- Running game clock on the bet slip ---------- */
+.prog.gameclock{display:block;font-variant-numeric:tabular-nums;font-weight:600}
