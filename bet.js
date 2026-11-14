@@ -8,7 +8,8 @@ const fmt = n => (n > 0 ? "+" : "") + n;
 const KINDS = [
     ["spread", "Spread"],
     ["ml", "Moneyline"],
-    ["total", "Total (Over/Under)"],
+    ["total", "Game total (Over/Under)"],
+    ["teamtotal", "Team total (one team Over/Under)"],
     ["prop", "Player prop"]
 ];
 // sensible default stat per position when a player is picked
@@ -115,6 +116,11 @@ function legRow() {
                 <label>Total (points, goals or runs) <input type="number" step="0.5" min="0" class="f-line" placeholder="48.5"></label>`;
             const t = st.game?.line?.total;
             if (t != null) q(".f-line").value = t;
+        } else if (kind === "teamtotal") {
+            box.innerHTML = `
+                <label>Team <select class="f-team">${teamOpts(false)}</select></label>
+                <label>Pick <select class="f-side">${sideOpts}</select></label>
+                <label>Team points, goals or runs <input type="number" step="0.5" min="0" class="f-line" placeholder="24.5"></label>`;
         } else if (kind === "prop") {
             const groups = {};
             Live.STATS.forEach(s => (groups[s.group] ||= []).push([s.key, s.label]));
@@ -155,7 +161,7 @@ function legRow() {
 
     async function refreshLines() {
         const my = ++token, kind = q(".f-kind").value;
-        if (!Odds.enabled || !st.game) { panel.hidden = true; return; }
+        if (!Odds.enabled || !st.game || kind === "teamtotal") { panel.hidden = true; return; }   // no sportsbook feed for team totals
         panel.hidden = false;
         const league = q(".f-league").value;
 
@@ -332,6 +338,14 @@ function legRow() {
                 text: `${g.label} ${side === "over" ? "Over" : "Under"} ${line}`
             };
         }
+        if (kind === "teamtotal") {
+            needLine();
+            const t = team(q(".f-team").value), side = q(".f-side").value;
+            return {
+                pick: { ...base, side, line, teamId: t.id, teamAbbr: t.abbr },
+                text: `${t.name} Team Total ${side === "over" ? "Over" : "Under"} ${line} (${g.label})`
+            };
+        }
         // prop
         if (league !== "nfl") throw new Error("Player props are only available for the NFL.");
         const pid = q(".f-player").value;
@@ -449,7 +463,10 @@ function renderBets() {
 }
 function drawBets() {
     const f = $("filter").value;
-    const list = Store.bets().filter(b => !f || b.profileId === f);
+    const words = $("search").value.toLowerCase().split(/\s+/).filter(Boolean);
+    const KIND_WORDS = { spread: "spread", ml: "moneyline ml", total: "game total over under", teamtotal: "team total over under", prop: "player prop" };
+    const hay = b => (profileName(b) + " " + b.legs.map(l => l.text + " " + (KIND_WORDS[l.pick?.kind] || "")).join(" ")).toLowerCase();
+    const list = Store.bets().filter(b => (!f || b.profileId === f) && words.every(w => hay(b).includes(w)));
     const x = Store.exposure(list);
     $("exposure").innerHTML = x.count
         ? `Open bets: <b>${x.count}</b> · at risk <b class="neg">${Store.money(x.atRisk)}</b> · to win <b class="pos">${Store.money(x.toWin)}</b>${x.hidden ? ` <span class="muted">(+${x.hidden} private)</span>` : ""}` : "";
@@ -457,7 +474,9 @@ function drawBets() {
         ? list.map(b => UI.betCard(b, { editable: true })).join("")
         : `<div class="empty">No bets yet.</div>`;
 }
+const profileName = b => Store.profile(b.profileId)?.name || "";
 $("filter").onchange = renderBets;
+$("search").oninput = renderBets;
 function postComment(btn) {
     const id = btn.dataset.bet, card = btn.closest(".bet-card");
     const input = card.querySelector(".cmt-in"), err = card.querySelector(".cmt-err");

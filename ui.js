@@ -20,7 +20,7 @@ const UI = (() => {
         const progress = l => {
             if (!l.pick) return "";
             if (l.status !== "pending") {
-                const shown = l.actual != null && ["prop", "total"].includes(l.pick.kind) ? `Final: ${l.actual}` : "";
+                const shown = l.actual != null && ["prop", "total", "teamtotal"].includes(l.pick.kind) ? `Final: ${l.actual}` : "";
                 return l.manual === false ? `<span class="prog muted">Auto-graded${shown ? " · " + esc(shown) : ""}</span>` : "";
             }
             const pr = typeof Live !== "undefined" ? Live.progress[l.id] : null;

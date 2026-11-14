@@ -167,6 +167,16 @@ const Live = (() => {
             return { ...r, grade: (over ? exceeded : !exceeded) ? "won" : "lost" };
         }
 
+        if (pick.kind === "teamtotal") {
+            const pts = score(pick.teamId);
+            if (!Number.isFinite(pts)) return { ...base, value: null, grade: "pending" };
+            const over = pick.side === "over", exceeded = pts > pick.line;
+            const r = { ...base, value: pts, text: `${pick.teamAbbr} ${pts} / ${pick.line}`, ratio: Math.min(1, pts / pick.line) };
+            if (!final) return { ...r, grade: exceeded ? (over ? "won" : "lost") : "pending" };
+            if (pts === pick.line) return { ...r, grade: "pending", note: PUSH };
+            return { ...r, grade: (over ? exceeded : !exceeded) ? "won" : "lost" };
+        }
+
         // spread / moneyline: compare the picked team to its opponent
         const mine = score(pick.teamId), theirs = score(pick.oppId);
         if (![mine, theirs].every(Number.isFinite)) return { ...base, value: null, grade: "pending" };

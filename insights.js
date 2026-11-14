@@ -101,7 +101,7 @@ function render() {
     $("notes").innerHTML = notes(mine, s).map(n => `<p>${n}</p>`).join("");
 
     /* Hit rate by bet type: every settled leg, grouped by spread / ML / total / each prop stat */
-    const KIND = { spread: "Spread", ml: "Moneyline", total: "Game total" };
+    const KIND = { spread: "Spread", ml: "Moneyline", total: "Game total", teamtotal: "Team total" };
     const groups = {};
     mine.flatMap(b => b.legs).filter(l => l.status !== "pending").forEach(l => {
         const k = !l.pick ? "Custom" : l.pick.kind === "prop" ? "Prop: " + l.pick.statLabel : KIND[l.pick.kind];

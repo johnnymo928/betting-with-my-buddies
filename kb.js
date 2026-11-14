@@ -98,7 +98,7 @@ window.renderKB = function () {
                 <li>While a leg is <b>pending</b> and has a game attached, the page loads that game's summary from ESPN.</li>
                 <li><b>Before kickoff:</b> shows "Waiting for game".</li>
                 <li><b>During the game:</b> shows live progress (for example 187 / 249.5). An <b>over</b> that passes its line is marked a hit immediately, since stats cannot go down. An <b>under</b> that passes its line is marked missed. Everything else waits for the final.</li>
-                <li><b>Final:</b> spreads, moneylines, totals and props are settled against the final score or stats.</li>
+                <li><b>Final:</b> spreads, moneylines, game totals, team totals and props are settled against the final score or stats.</li>
                 <li><b>Left for you to grade by hand:</b> a result exactly on the line (push), a tie on a moneyline, and a player with no recorded stats (did not play). The leg shows a note explaining why.</li>
                 <li><b>Manual override:</b> if someone marks a leg hit or missed themselves, it is locked and auto-grading never changes it. Pressing reset hands it back to auto-grading.</li>
             </ol>
