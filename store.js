@@ -211,9 +211,9 @@ const Store = (() => {
         // a leg is a plain string (custom) or { text, pick } built from the dropdowns
         const clean = legs.map(l => typeof l === "string" ? { text: l.trim() } : { text: String(l.text).trim(), pick: l.pick })
             .filter(l => l.text);
-        // betting closes at kickoff (the sheet's script enforces the same rule)
-        if (clean.some(l => l.pick?.start && Date.parse(l.pick.start) <= Date.now()))
-            throw new Error("A game in this bet has already kicked off. Betting closes at kickoff.");
+        // pre-game bets close at kickoff; a leg flagged live (placed on a game in progress) is allowed
+        if (clean.some(l => l.pick?.start && !l.pick.live && Date.parse(l.pick.start) <= Date.now()))
+            throw new Error("A game in this bet has already kicked off. Pick it from the live games to place a live bet.");
         if (type === "parlay" && clean.length < 2) throw new Error("A parlay needs at least 2 legs.");
         if (type === "single" && clean.length < 1) throw new Error("Describe your bet.");
         if (!(stake > 0)) throw new Error("Enter a stake above 0.");

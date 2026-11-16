@@ -94,9 +94,10 @@ function doPost(e) {
         if (!body.record.text || !body.record.betId || !body.record.profileId) return json_({ error: "bad_record" });
       }
       if (body.kind === "pick" && (!body.record.profileId || !body.record.eventId || !body.record.teamId)) return json_({ error: "bad_record" });
-      // betting closes at kickoff: refuse a new bet that was placed after any of its games started
+      // pre-game bets close at kickoff: refuse a new bet placed after a game started, unless that leg is a live bet
       if (body.kind === "bet" && i < 0) {
         const late = (body.record.legs || []).some(function (lg) {
+          if (lg.pick && lg.pick.live === true) return false;
           const st = lg.pick && lg.pick.start ? Date.parse(lg.pick.start) : NaN;
           return isFinite(st) && Number(body.record.createdAt) >= st;
         });

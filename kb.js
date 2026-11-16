@@ -164,8 +164,9 @@ window.renderKB = function () {
                 <li><b>Results</b> come from ESPN's scoreboard and box score endpoints. Finished games are remembered on the device, so old weeks aren't fetched again. It only runs during the regular season.</li>
             </ul>`],
 
-        ["Betting closes at kickoff", `
-            <p>A game that has started can't be picked on the Place Bet page, and a bet that includes one is refused. The site checks the device clock, and the sheet's script also refuses a new bet whose placed time is at or after a leg's kickoff, so an out-of-date browser tab can't slip one through. A bet placed offline before kickoff is still accepted when it syncs later.</p>`],
+        ["Betting closes at kickoff (live bets excepted)", `
+            <p><b>Live bets:</b> a game in progress shows as LIVE on the Place Bet page and can be bet on. The leg is saved with the score and clock at that moment, and you enter the line and odds from your sportsbook app (the saved lines are from before kickoff, so they are hidden). Grading is unchanged. The pool still locks at kickoff.</p>
+            <p>For pre-game bets, a game that has started can't be picked on the Place Bet page, and a bet that includes one is refused. The site checks the device clock, and the sheet's script also refuses a new bet whose placed time is at or after a leg's kickoff, so an out-of-date browser tab can't slip one through. A bet placed offline before kickoff is still accepted when it syncs later.</p>`],
 
         ["Private stakes and the admin PIN", `
             <p>A bet marked <b>private</b> hides its stake, payout and profit on every page. It still counts toward records and hit rates, but is left out of profit, ROI, at-risk and best-win totals so the amount can't be worked out.</p>

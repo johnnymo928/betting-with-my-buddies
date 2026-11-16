@@ -71,15 +71,16 @@ function legRow() {
     let token = 0;                                // ignores stale odds responses
 
     /* ----- games ----- */
-    // betting closes at kickoff: games that have started are listed but can't be picked
-    const locked = g => g.state !== "pre" || (g.start && Date.parse(g.start) <= Date.now());
+    // games in progress are open for live bets; only finished games are closed (the list already leaves those out)
+    const locked = g => g.state === "post";
+    const isLive = g => !!g && g.state === "in";
     async function loadGames() {
         q(".f-game").innerHTML = `<option>Loading games&hellip;</option>`;
         st.games = []; st.game = null; st.loadErr = false;
         try { st.games = await Live.games(q(".f-league").value); }
         catch (e) { console.error(e); st.loadErr = true; }
         q(".f-game").innerHTML = st.games.length
-            ? st.games.map((g, i) => `<option value="${i}" ${locked(g) ? "disabled" : ""}>${esc(g.label)} · ${esc(g.detail)}${locked(g) ? " (betting closed)" : ""}</option>`).join("")
+            ? st.games.map((g, i) => `<option value="${i}" ${locked(g) ? "disabled" : ""}>${esc(g.label)} · ${isLive(g) ? "LIVE " + esc(g.scoreLine) + " · " : ""}${esc(g.detail)}${locked(g) ? " (betting closed)" : ""}</option>`).join("")
             : `<option value="">${st.loadErr ? "Couldn't load games. Try again in a moment." : "No upcoming games"}</option>`;
         const open = st.games.findIndex(g => !locked(g));
         if (open >= 0) q(".f-game").value = String(open);
@@ -163,6 +164,7 @@ function legRow() {
         const my = ++token, kind = q(".f-kind").value;
         if (!Odds.enabled || !st.game || kind === "teamtotal") { panel.hidden = true; return; }   // no sportsbook feed for team totals
         panel.hidden = false;
+        if (isLive(st.game)) return showMsg("Live game: the saved lines are from before kickoff. Enter the line and odds from your sportsbook app.");
         const league = q(".f-league").value;
 
         try {
@@ -318,7 +320,9 @@ function legRow() {
         const g = st.game;
         if (!g) throw new Error("Pick a game for every leg.");
         const league = q(".f-league").value;
+        const live = isLive(g);
         const base = { kind, league, eventId: g.id, gameLabel: g.label, start: g.start,
+            ...(live ? { live: true, scoreAtBet: g.scoreLine, clockAtBet: g.detail } : {}),
             ...(row._price != null ? { book: row._book, price: row._price, oddsAt: row._oddsAt } : {}) };
         const line = parseFloat(q(".f-line")?.value);
         const needLine = () => { if (!Number.isFinite(line)) throw new Error("Enter a line for every leg."); };
@@ -441,7 +445,10 @@ form.onsubmit = e => {
             odds: parseInt($("odds").value, 10),
             privateAmount: $("private").checked,
             book: $("book").value,
-            legs: [...$("legs").children].map(r => r.getLeg())
+            legs: [...$("legs").children].map(r => {
+                const l = r.getLeg();
+                return l.pick.live ? { ...l, text: `${l.text} [LIVE at ${l.pick.scoreAtBet}, ${l.pick.clockAtBet}]` } : l;
+            })
         });
         localStorage.setItem("bwmb.lastProfile", $("profile").value);
         $("legs").innerHTML = ""; $("stake").value = ""; $("private").checked = false;

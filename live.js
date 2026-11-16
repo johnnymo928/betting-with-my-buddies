@@ -86,6 +86,10 @@ const Live = (() => {
                 });
                 return {
                     id: e.id, state: e.status.type.state, detail: e.status.type.shortDetail, start: e.date || null,
+                    // current score, saved on a live bet so everyone can see the game state when it was placed
+                    scoreLine: e.status.type.state === "in"
+                        ? [away, home].map(t => `${tm(t).abbr} ${comp.competitors.find(c => String(c.team?.id) === String(t.id))?.score ?? 0}`).join(" – ")
+                        : "",
                     label: `${tm(away).abbr} @ ${tm(home).abbr}`,
                     teams: [tm(away), tm(home)],
                     // ESPN's current line, used to prefill the form
