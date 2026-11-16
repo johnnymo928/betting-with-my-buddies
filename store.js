@@ -10,8 +10,13 @@ const Store = (() => {
         try { return JSON.parse(localStorage.getItem(KEY)) || {}; }
         catch { return {}; }
     };
-    const EMPTY = () => ({ profiles: [], bets: [], comments: [], picks: [], pinHash: null, outbox: [] });
+    const EMPTY = () => ({ profiles: [], bets: [], comments: [], picks: [], groups: [], pinHash: null, outbox: [] });
     let db = Object.assign(EMPTY(), load());
+    /* Groups: every bet, pick and profile belongs to one or more groups. Anything saved before groups
+       existed has no group and counts as the default group, so nothing is lost or moved. */
+    const DEFAULT_GROUP = "default";
+    const ensureGroups = () => { if (!db.groups?.length) db.groups = [{ id: DEFAULT_GROUP, name: "Ohio", color: "#3ea6ff" }]; };
+    ensureGroups();
     const save = () => {
         try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { console.error(e); }
     };
@@ -164,15 +169,96 @@ const Store = (() => {
     /* ---------- Profiles ---------- */
     const COLORS = ["#3ea6ff", "#34d399", "#f5b942", "#f87171", "#a78bfa", "#f472b6", "#22d3ee", "#fb923c"];
 
-    const profiles = () => db.profiles.slice();
+    const memberOf = p => (p.groupIds && p.groupIds.length ? p.groupIds : [DEFAULT_GROUP]);
+    const gid = r => r.groupId || DEFAULT_GROUP;
+    const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+    const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} };
+
+    /* ---------- Sign-in + current group ----------
+       The signed-in profile is remembered on this device. The "current group" decides which
+       profiles, bets, comments and picks every page shows. */
+    const session = () => db.profiles.find(x => x.id === lsGet("bwmb.session")) || null;
+    const myGroups = () => { const p = session(); return p ? db.groups.filter(g => memberOf(p).includes(g.id)) : db.groups.slice(); };
+    const activeGroup = () => {
+        const mine = myGroups(), saved = lsGet("bwmb.group");
+        return (mine.find(g => g.id === saved) || mine[0] || db.groups[0]).id;
+    };
+    const setActiveGroup = id => { if (myGroups().some(g => g.id === id)) lsSet("bwmb.group", id); };
+    const inGroup = r => gid(r) === activeGroup();
+    const hashPass = async (p, pass) => {
+        const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(p.id + ":" + String(pass)));
+        return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+    };
+    // { ok, profile } | { ok:false, needsSetup, profile } | { ok:false, error }
+    async function login(name, pass) {
+        const p = db.profiles.find(x => x.name.toLowerCase() === String(name || "").trim().toLowerCase());
+        if (!p) return { ok: false, error: "no_user" };
+        if (!p.pass) return { ok: false, needsSetup: true, profile: p };
+        if (await hashPass(p, pass) !== p.pass) return { ok: false, error: "bad_pass" };
+        lsSet("bwmb.session", p.id); lsSet("bwmb.lastProfile", p.id); return { ok: true, profile: p };
+    }
+    async function setPasscode(profileId, pass, { signIn } = {}) {
+        const p = db.profiles.find(x => x.id === profileId); if (!p) throw new Error("No such profile.");
+        if (String(pass).length < 4) throw new Error("Use at least 4 characters.");
+        p.pass = await hashPass(p, pass); save(); push({ action: "upsert", kind: "profile", record: p });
+        if (signIn) { lsSet("bwmb.session", p.id); lsSet("bwmb.lastProfile", p.id); }
+    }
+    function resetPasscode(profileId) {
+        const p = db.profiles.find(x => x.id === profileId);
+        if (p) { delete p.pass; save(); push({ action: "upsert", kind: "profile", record: p }); }
+    }
+    const logout = () => lsSet("bwmb.session", null);
+
+    const allProfiles = () => db.profiles.slice();
+    const profiles = () => db.profiles.filter(p => memberOf(p).includes(activeGroup()));
     const profile = id => db.profiles.find(p => p.id === id);
 
-    function addProfile(name, color) {
+    /* ---------- Groups (super admin) ---------- */
+    const groups = () => db.groups.slice();
+    const group = id => db.groups.find(g => g.id === id);
+    function addGroup(name, color) {
+        name = String(name || "").trim();
+        if (!name) throw new Error("Group name is required.");
+        if (db.groups.some(g => g.name.toLowerCase() === name.toLowerCase())) throw new Error("A group with that name already exists.");
+        const g = { id: uid(), name, color: color || COLORS[db.groups.length % COLORS.length] };
+        db.groups.push(g); save(); return g;
+    }
+    function updateGroup(id, f) {
+        const g = group(id); if (!g) return;
+        if (f.name !== undefined) {
+            const n = f.name.trim(); if (!n) throw new Error("Group name is required.");
+            if (db.groups.some(x => x.id !== id && x.name.toLowerCase() === n.toLowerCase())) throw new Error("A group with that name already exists.");
+            g.name = n;
+        }
+        if (f.color) g.color = f.color;
+        save();
+    }
+    function deleteGroup(id) {
+        if (db.groups.length < 2) throw new Error("You need at least one group.");
+        db.groups = db.groups.filter(g => g.id !== id);
+        db.profiles.forEach(p => { if (p.groupIds) p.groupIds = p.groupIds.filter(x => x !== id); });
+        db.bets = db.bets.filter(b => gid(b) !== id);
+        const ids = new Set(db.bets.map(b => b.id));
+        db.comments = db.comments.filter(c => ids.has(c.betId));
+        db.picks = db.picks.filter(p => gid(p) !== id);
+        save();
+    }
+    function setMembership(profileId, groupId, on) {
+        const p = profile(profileId); if (!p) return;
+        const cur = new Set(memberOf(p)); on ? cur.add(groupId) : cur.delete(groupId);
+        p.groupIds = [...cur]; save(); push({ action: "upsert", kind: "profile", record: p });
+    }
+    const groupStats = id => ({
+        members: db.profiles.filter(p => memberOf(p).includes(id)).length,
+        bets: db.bets.filter(b => !b.deleted && gid(b) === id).length
+    });
+
+    function addProfile(name, color, groupIds) {
         name = name.trim();
         if (!name) throw new Error("Name is required.");
         if (db.profiles.some(p => p.name.toLowerCase() === name.toLowerCase()))
             throw new Error("That name is already taken.");
-        const p = { id: uid(), name, color: color || COLORS[db.profiles.length % COLORS.length] };
+        const p = { id: uid(), name, color: color || COLORS[db.profiles.length % COLORS.length], groupIds: groupIds?.length ? groupIds : [activeGroup()] };
         db.profiles.push(p); save(); push({ action: "upsert", kind: "profile", record: p }); return p;
     }
     function updateProfile(id, fields) {
@@ -203,8 +289,8 @@ const Store = (() => {
        A parlay loses as soon as one leg loses, wins when every leg wins. */
     // Removed bets are soft-deleted: flagged, hidden everywhere, and recoverable by an admin.
     const byNewest = (a, b) => b.createdAt - a.createdAt;
-    const bets = () => db.bets.filter(b => !b.deleted).sort(byNewest);
-    const removedBets = () => db.bets.filter(b => b.deleted).sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+    const bets = () => db.bets.filter(b => !b.deleted && inGroup(b)).sort(byNewest);
+    const removedBets = () => db.bets.filter(b => b.deleted && inGroup(b)).sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
 
     function addBet({ profileId, type, stake, odds, legs, privateAmount, book }) {
         if (!profile(profileId)) throw new Error("Pick a profile.");
@@ -219,7 +305,7 @@ const Store = (() => {
         if (!(stake > 0)) throw new Error("Enter a stake above 0.");
         if (!Number.isFinite(odds) || Math.abs(odds) < 100) throw new Error("Odds must be American, like -110 or +250.");
         const bet = {
-            id: uid(), profileId, createdAt: Date.now(), type, stake, odds, private: !!privateAmount, book: book || "",
+            id: uid(), profileId, groupId: activeGroup(), createdAt: Date.now(), type, stake, odds, private: !!privateAmount, book: book || "",
             legs: (type === "single" ? clean.slice(0, 1) : clean).map(l => ({ id: uid(), text: l.text, status: "pending", ...(l.pick ? { pick: l.pick } : {}) }))
         };
         db.bets.push(bet); save(); pushBet(bet.id); return bet;
@@ -238,25 +324,26 @@ const Store = (() => {
         db.comments = db.comments.filter(c => c.id !== id);
         save(); push({ action: "remove", kind: "comment", id });
     }
-    const allComments = () => db.comments.slice().sort((a, b) => b.createdAt - a.createdAt);
+    const allComments = () => db.comments.filter(c => { const b = db.bets.find(x => x.id === c.betId); return !b || inGroup(b); }).sort((a, b) => b.createdAt - a.createdAt);
 
     /* ---------- Pool picks ----------
        pick = { id, mode: "survivor"|"pickem", profileId, season, week, eventId, teamId, teamAbbr, teamName,
                 gameLabel, start, createdAt }
        survivor: one pick per player per week (id is per week, so choosing again replaces it)
        pickem:   one pick per player per game */
-    const picks = () => db.picks.slice();
+    const picks = () => db.picks.filter(inGroup);
     function setPick(r) {
         if (!profile(r.profileId)) throw new Error("Pick your profile first.");
         if (Date.parse(r.start) <= Date.now()) throw new Error("That game has already kicked off.");
-        const id = r.mode === "survivor" ? `sv:${r.profileId}:${r.season}:${r.week}` : `pe:${r.profileId}:${r.eventId}`;
+        const suffix = activeGroup() === DEFAULT_GROUP ? "" : `:${activeGroup()}`;       // the default group keeps its old ids
+        const id = (r.mode === "survivor" ? `sv:${r.profileId}:${r.season}:${r.week}` : `pe:${r.profileId}:${r.eventId}`) + suffix;
         const old = db.picks.find(p => p.id === id);
         if (old && old.eventId !== r.eventId && Date.parse(old.start) <= Date.now())
             throw new Error("Your pick for this week is locked: its game already kicked off.");
-        if (r.mode === "survivor" && db.picks.some(p => p.mode === "survivor" && p.profileId === r.profileId &&
+        if (r.mode === "survivor" && db.picks.some(p => inGroup(p) && p.mode === "survivor" && p.profileId === r.profileId &&
                 p.season === r.season && p.week !== r.week && p.teamId === r.teamId))
             throw new Error(`You already used ${r.teamName} in an earlier week.`);
-        const p = { ...r, id, createdAt: Date.now() };
+        const p = { ...r, id, groupId: activeGroup(), createdAt: Date.now() };
         db.picks = db.picks.filter(x => x.id !== id); db.picks.push(p);
         save(); push({ action: "upsert", kind: "pick", record: p }); return p;
     }
@@ -277,7 +364,7 @@ const Store = (() => {
     // Bets lost within the last `windowMs`. A bet is lost the moment a leg loses; `legs` are the ones that missed.
     function recentLosses(windowMs) {
         const cutoff = Date.now() - windowMs;
-        return db.bets.filter(b => !b.deleted && betStatus(b) === "lost").map(b => {
+        return db.bets.filter(b => !b.deleted && inGroup(b) && betStatus(b) === "lost").map(b => {
             const missed = b.legs.filter(l => l.status === "lost");
             if (!missed.every(l => l.settledAt)) return null;          // settled before times were recorded: don't announce
             return { bet: b, missed, at: Math.min(...missed.map(l => l.settledAt)) };
@@ -287,7 +374,7 @@ const Store = (() => {
     // Hits settled within the last `windowMs`: individual legs, and whole bets that have fully hit.
     function recentHits(windowMs) {
         const cutoff = Date.now() - windowMs, legs = [], full = [];
-        db.bets.filter(b => !b.deleted).forEach(b => {
+        db.bets.filter(b => !b.deleted && inGroup(b)).forEach(b => {
             b.legs.forEach(l => {
                 if (l.status === "won" && l.settledAt && l.settledAt >= cutoff) legs.push({ bet: b, leg: l, at: l.settledAt });
             });
@@ -390,10 +477,11 @@ const Store = (() => {
 
     return {
         sync: { enabled: !!cfg, status: () => syncStatus, pending, onStatus: f => statusListeners.push(f), pull },
-        COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
+        COLORS, esc, allProfiles, profiles, profile, groups, group, addGroup, updateGroup, deleteGroup, setMembership, groupStats, memberOf,
+        session, myGroups, activeGroup, setActiveGroup, login, setPasscode, resetPasscode, logout, addProfile, updateProfile, deleteProfile,
         comments, allComments, addComment, removeComment, picks, setPick,
         bets, removedBets, addBet, setLegStatus, recentHits, recentLosses, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
         adminLogin, adminLogout, isAdmin, adminPost, exportData, importData,
-        reload() { db = Object.assign(EMPTY(), load()); }
+        reload() { db = Object.assign(EMPTY(), load()); ensureGroups(); }
     };
 })();

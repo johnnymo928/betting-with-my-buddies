@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin &middot; Bettin with Buddies</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <img class="logo-mark" src="logo.png" alt="" width="113" height="96">
+        <div><h1 aria-label="Bettin with Buddies"><span class="l1">Bettin With</span><span class="l2">Buddies</span></h1><p class="tagline">Super Admin</p></div>
+    </div>
+</header>
+
+<main class="dashboard page-narrow">
+    <section class="panel" id="gate" hidden>
+        <div class="panel-head"><h2><span class="tag tag-gold">LOCKED</span> Super admin PIN</h2></div>
+        <form id="gate-form" class="form" novalidate>
+            <label>PIN <input id="pin" type="password" inputmode="numeric" autocomplete="off" required></label>
+            <p class="form-error" id="gate-error" role="alert"></p>
+            <button class="btn primary" type="submit">Continue</button>
+        </form>
+    </section>
+
+    <div id="tools" hidden>
+        <section class="panel">
+            <div class="panel-head"><h2><span class="tag">GROUPS</span> Groups</h2></div>
+            <p class="hint">Each group has its own bets, comments, pool and leaderboard. Someone can be in several groups and switches between them at the top of the page. Existing data lives in the Ohio group.</p>
+            <form id="group-form" class="form inline" novalidate>
+                <input id="g-name" type="text" maxlength="30" placeholder="New group name" aria-label="New group name">
+                <input id="g-color" type="color" aria-label="Group color">
+                <button class="btn primary" type="submit">Add group</button>
+            </form>
+            <p class="form-error" id="group-error" role="alert"></p>
+            <div id="group-list"></div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-head"><h2><span class="tag tag-alt">PEOPLE</span> Members &amp; Accounts</h2></div>
+            <p class="hint">Tick the groups each person belongs to. A person with no passcode sets their own the first time they sign in. Reset clears it so they set a new one.</p>
+            <form id="person-form" class="form inline" novalidate>
+                <input id="p-name" type="text" maxlength="24" placeholder="New person's name" aria-label="New person's name">
+                <span></span>
+                <button class="btn primary" type="submit">Add person</button>
+            </form>
+            <p class="form-error" id="person-error" role="alert"></p>
+            <div style="overflow-x:auto"><table class="member-grid" id="member-grid"></table></div>
+        </section>
+
+        <section class="panel">
+            <div class="row-btns"><button class="btn ghost" id="lock" type="button">Lock</button></div>
+        </section>
+    </div>
+</main>
+
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="nav.js"></script>
+<script src="superadmin.js"></script>
+</body>
+</html>

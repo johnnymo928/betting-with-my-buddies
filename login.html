@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in &middot; Bettin with Buddies</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <img class="logo-mark" src="logo.png" alt="" width="113" height="96">
+        <div><h1 aria-label="Bettin with Buddies"><span class="l1">Bettin With</span><span class="l2">Buddies</span></h1><p class="tagline">Sign in</p></div>
+    </div>
+</header>
+
+<main class="dashboard login-wrap">
+    <section class="panel" id="step-login">
+        <div class="panel-head"><h2><span class="tag tag-gold">SIGN IN</span> Welcome back</h2></div>
+        <form id="login-form" class="form" novalidate>
+            <label>Your name
+                <input id="l-name" type="text" list="l-names" autocomplete="username" required>
+                <datalist id="l-names"></datalist>
+            </label>
+            <label>Passcode
+                <input id="l-pass" type="password" autocomplete="current-password">
+            </label>
+            <p class="form-error" id="l-error" role="alert"></p>
+            <button class="btn primary" type="submit">Sign in</button>
+            <p class="hint">First time here? Enter your name and leave the passcode empty. You will be asked to set one.</p>
+        </form>
+    </section>
+
+    <section class="panel" id="step-setup" hidden>
+        <div class="panel-head"><h2><span class="tag tag-alt">FIRST TIME</span> <span id="s-title">Set your passcode</span></h2></div>
+        <form id="setup-form" class="form" novalidate>
+            <p class="hint">Pick a passcode (4 or more characters). You will use it to sign in on any device.</p>
+            <label>New passcode <input id="s-pass" type="password" autocomplete="new-password" required></label>
+            <label>Confirm passcode <input id="s-pass2" type="password" autocomplete="new-password" required></label>
+            <p class="form-error" id="s-error" role="alert"></p>
+            <button class="btn primary" type="submit">Save and sign in</button>
+            <button class="btn ghost" type="button" id="s-back">Back</button>
+        </form>
+    </section>
+</main>
+
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="login.js"></script>
+</body>
+</html>
