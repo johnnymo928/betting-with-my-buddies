@@ -7,6 +7,11 @@
 const $ = id => document.getElementById(id);
 const { esc } = Store;
 
+if (Store.poolHidden()) {                        // the admin has hidden the Pool
+    document.querySelector("main").innerHTML = `<section class="panel"><div class="empty">The Pool is closed for now.</div></section>`;
+    throw new Error("pool hidden");
+}
+
 const FINALS_KEY = "bwmb.poolFinals";            // finished games, so old weeks never need fetching again
 const readJSON = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 let mode = readJSON("bwmb.poolMode", "survivor");

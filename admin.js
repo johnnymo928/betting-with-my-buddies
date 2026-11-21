@@ -13,7 +13,7 @@ function showGate(msg) {
 }
 function showTools() {
     $("gate").hidden = true; $("tools").hidden = false;
-    renderProfiles(); renderBets(); renderComments();
+    renderProfiles(); renderBets(); renderComments(); renderPool();
     $("odds-panel").hidden = !Odds.enabled;                     // hidden while odds are off
     if (Odds.enabled) checkOdds();
 }
@@ -125,6 +125,15 @@ $("admin-comments").onclick = e => {
     const id = e.target.dataset.delComment; if (!id) return;
     Store.removeComment(id); renderComments();
 };
+
+/* ---------- Pool visibility ---------- */
+function renderPool() {
+    const h = Store.poolHidden();
+    $("pool-status").innerHTML = `The Pool is <b>${h ? "hidden" : "showing"}</b>.`;
+    $("pool-toggle").textContent = h ? "Show the Pool" : "Hide the Pool";
+}
+$("pool-toggle").onclick = () => { Store.setPoolHidden(!Store.poolHidden()); renderPool(); };
+window.addEventListener("storage", renderPool);
 
 /* ---------- Odds ---------- */
 const ODDS_ERR = {

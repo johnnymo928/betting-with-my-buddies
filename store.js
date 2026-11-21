@@ -245,7 +245,16 @@ const Store = (() => {
                 gameLabel, start, createdAt }
        survivor: one pick per player per week (id is per week, so choosing again replaces it)
        pickem:   one pick per player per game */
-    const picks = () => db.picks.slice();
+    const SETTING = "setting:pool-hidden";          // admin switch, stored as a special pick record so it syncs to everyone
+    const picks = () => db.picks.filter(p => p.id !== SETTING);
+    // hidden unless an admin has explicitly shown it
+    const poolHidden = () => { const r = db.picks.find(p => p.id === SETTING); return !r || r.hidden !== false; };
+    function setPoolHidden(hidden) {
+        const r = { id: SETTING, mode: "setting", profileId: "_", eventId: "_", teamId: "_", hidden: !!hidden, createdAt: Date.now() };
+        db.picks = db.picks.filter(p => p.id !== SETTING); db.picks.push(r);
+        save(); push({ action: "upsert", kind: "pick", record: r });
+        window.dispatchEvent(new Event("storage"));
+    }
     function setPick(r) {
         if (!profile(r.profileId)) throw new Error("Pick your profile first.");
         if (Date.parse(r.start) <= Date.now()) throw new Error("That game has already kicked off.");
@@ -391,7 +400,7 @@ const Store = (() => {
     return {
         sync: { enabled: !!cfg, status: () => syncStatus, pending, onStatus: f => statusListeners.push(f), pull },
         COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
-        comments, allComments, addComment, removeComment, picks, setPick,
+        comments, allComments, addComment, removeComment, picks, setPick, poolHidden, setPoolHidden,
         bets, removedBets, addBet, setLegStatus, recentHits, recentLosses, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
         adminLogin, adminLogout, isAdmin, adminPost, exportData, importData,
         reload() { db = Object.assign(EMPTY(), load()); }

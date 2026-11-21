@@ -11,8 +11,12 @@
     const cur = location.pathname.split("/").pop() || "index.html";
     const nav = document.createElement("nav");
     nav.className = "nav";
-    nav.innerHTML = links.map(([href, label]) =>
-        `<a href="${href}" ${href === cur ? 'class="active" aria-current="page"' : ""}>${label}</a>`).join("");
+    const draw = () => {
+        nav.innerHTML = links.filter(([href]) => href !== "pool.html" || !Store.poolHidden()).map(([href, label]) =>
+            `<a href="${href}" ${href === cur ? 'class="active" aria-current="page"' : ""}>${label}</a>`).join("");
+    };
+    draw();
+    window.addEventListener("storage", draw);          // fires after a sync pull or an admin change
     const bar = document.querySelector(".topbar");
     bar.insertBefore(nav, bar.querySelector(".topright") || document.getElementById("clock"));
 })();
