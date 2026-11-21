@@ -201,7 +201,7 @@ function lossItems() {
    resolved the percentages before the first full layout, so the first load ran slow or stuck until the
    screen was rotated. Here the distance is measured, and the animation is re-measured whenever the
    text, the fonts or the screen size change, keeping its place so it never jumps back to the start. */
-const TICKER_PX_PER_SEC = 165;               // the pace you chose (half of the original speed) on a full ticker
+const TICKER_PX_PER_SEC = 123.75;              // 25% slower than the previous 165
 let tickerAnim = null, tickerTimer = null, lastTickerW = 0;
 
 function restartTicker() {
