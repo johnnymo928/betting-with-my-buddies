@@ -30,21 +30,10 @@
     <div id="tools" hidden>
         <section class="panel">
             <div class="panel-head"><h2><span class="tag">GROUPS</span> Groups</h2></div>
-            <p class="hint">Each group has its own bets, comments, pool and leaderboard. A group is either public (anyone can join), or protected by a PIN or a secret question. Whoever knows the PIN or answer can join it on the sign-in page. Ohio is public. Someone can be in several groups and switches between them at the top of the page. Existing data lives in the Ohio group.</p>
-            <form id="group-form" class="form" novalidate>
-                <div class="inline-row">
-                    <input id="g-name" type="text" maxlength="30" placeholder="New group name" aria-label="New group name">
-                    <input id="g-color" type="color" aria-label="Group color">
-                </div>
-                <div class="inline-row">
-                    <select id="g-type" aria-label="How people join">
-                        <option value="pin">Join with a PIN</option>
-                        <option value="question">Join with a secret question</option>
-                        <option value="">Public (anyone can join)</option>
-                    </select>
-                    <input id="g-question" type="text" maxlength="120" placeholder="Question, e.g. Where did we meet?" aria-label="Secret question" hidden>
-                    <input id="g-answer" type="text" maxlength="60" placeholder="PIN" aria-label="PIN or answer" autocomplete="off">
-                </div>
+            <p class="hint">Each group has its own bets, comments, pool and leaderboard. Someone can be in several groups and switches between them at the top of the page. Existing data lives in the Ohio group.</p>
+            <form id="group-form" class="form inline" novalidate>
+                <input id="g-name" type="text" maxlength="30" placeholder="New group name" aria-label="New group name">
+                <input id="g-color" type="color" aria-label="Group color">
                 <button class="btn primary" type="submit">Add group</button>
             </form>
             <p class="form-error" id="group-error" role="alert"></p>
@@ -53,7 +42,7 @@
 
         <section class="panel">
             <div class="panel-head"><h2><span class="tag tag-alt">PEOPLE</span> Members &amp; Accounts</h2></div>
-            <p class="hint">Tick the groups each person belongs to. People also add themselves when they join a group.</p>
+            <p class="hint">Tick the groups each person belongs to. A person with no passcode sets their own the first time they sign in. Reset clears it so they set a new one.</p>
             <form id="person-form" class="form inline" novalidate>
                 <input id="p-name" type="text" maxlength="24" placeholder="New person's name" aria-label="New person's name">
                 <span></span>

@@ -185,33 +185,27 @@ const Store = (() => {
     };
     const setActiveGroup = id => { if (myGroups().some(g => g.id === id)) lsSet("bwmb.group", id); };
     const inGroup = r => gid(r) === activeGroup();
-    /* Group secret: a PIN or a question with a secret answer. Whoever knows it can join the group.
-       Only a hash is stored. The answer is compared ignoring case and extra spaces. */
-    const norm = t => String(t || "").trim().toLowerCase().replace(/\s+/g, " ");
-    const hashSecret = async (g, text) => {
-        const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(g.id + ":" + norm(text)));
-        return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, "0")).join("");
+    const hashPass = async (p, pass) => {
+        const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(p.id + ":" + String(pass)));
+        return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
     };
-    // what the sign-in page may show about a group (never the hash)
-    const groupGate = g => g.secret ? { type: g.secret.type, question: g.secret.question || "" } : null;
-    async function checkGroupSecret(groupId, text) {
-        const g = db.groups.find(x => x.id === groupId); if (!g) return false;
-        if (!g.secret) return true;                                  // no secret set: open group
-        return (await hashSecret(g, text)) === g.secret.hash;
+    // { ok, profile } | { ok:false, needsSetup, profile } | { ok:false, error }
+    async function login(name, pass) {
+        const p = db.profiles.find(x => x.name.toLowerCase() === String(name || "").trim().toLowerCase());
+        if (!p) return { ok: false, error: "no_user" };
+        if (!p.pass) return { ok: false, needsSetup: true, profile: p };
+        if (await hashPass(p, pass) !== p.pass) return { ok: false, error: "bad_pass" };
+        lsSet("bwmb.session", p.id); lsSet("bwmb.lastProfile", p.id); return { ok: true, profile: p };
     }
-    async function setGroupSecret(groupId, { type, question, answer }) {
-        const g = db.groups.find(x => x.id === groupId); if (!g) return;
-        if (!type) { delete g.secret; save(); return; }
-        if (norm(answer).length < 3) throw new Error(type === "pin" ? "Use a PIN of at least 3 characters." : "The answer needs at least 3 characters.");
-        if (type === "question" && !String(question || "").trim()) throw new Error("Write the question.");
-        g.secret = { type, ...(type === "question" ? { question: String(question).trim().slice(0, 120) } : {}), hash: await hashSecret(g, answer) };
-        save();
-    }
-    function signIn(profileId, groupId) {
+    async function setPasscode(profileId, pass, { signIn } = {}) {
         const p = db.profiles.find(x => x.id === profileId); if (!p) throw new Error("No such profile.");
-        if (groupId && !memberOf(p).includes(groupId)) setMembership(profileId, groupId, true);
-        lsSet("bwmb.session", p.id); lsSet("bwmb.lastProfile", p.id);
-        if (groupId) lsSet("bwmb.group", groupId);
+        if (String(pass).length < 4) throw new Error("Use at least 4 characters.");
+        p.pass = await hashPass(p, pass); save(); push({ action: "upsert", kind: "profile", record: p });
+        if (signIn) { lsSet("bwmb.session", p.id); lsSet("bwmb.lastProfile", p.id); }
+    }
+    function resetPasscode(profileId) {
+        const p = db.profiles.find(x => x.id === profileId);
+        if (p) { delete p.pass; save(); push({ action: "upsert", kind: "profile", record: p }); }
     }
     const logout = () => lsSet("bwmb.session", null);
 
@@ -484,7 +478,7 @@ const Store = (() => {
     return {
         sync: { enabled: !!cfg, status: () => syncStatus, pending, onStatus: f => statusListeners.push(f), pull },
         COLORS, esc, allProfiles, profiles, profile, groups, group, addGroup, updateGroup, deleteGroup, setMembership, groupStats, memberOf,
-        session, myGroups, activeGroup, setActiveGroup, signIn, checkGroupSecret, setGroupSecret, groupGate, logout, addProfile, updateProfile, deleteProfile,
+        session, myGroups, activeGroup, setActiveGroup, login, setPasscode, resetPasscode, logout, addProfile, updateProfile, deleteProfile,
         comments, allComments, addComment, removeComment, picks, setPick,
         bets, removedBets, addBet, setLegStatus, recentHits, recentLosses, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
         adminLogin, adminLogout, isAdmin, adminPost, exportData, importData,

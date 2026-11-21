@@ -667,11 +667,3 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
 .login-wrap{display:block;max-width:420px;width:100%;margin:40px auto}
 .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
 .pill.ok{color:var(--green);border-color:rgba(52,211,153,.4)}
-
-.inline-row{display:flex;gap:10px;align-items:center}
-.inline-row input[type=text]{flex:1;min-width:0}
-.inline-row select{flex:0 0 auto}
-.group-card{padding:10px 0;border-bottom:1px solid var(--line)}
-.group-card .group-row{padding:0}
-.group-card .secret-row{display:flex;gap:8px;align-items:center;margin:8px 0 0 34px;flex-wrap:wrap}
-.group-card .secret-row input[type=text]{flex:1;min-width:140px}
