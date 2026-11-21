@@ -652,18 +652,3 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
     .brand > div{margin-left:-44px}
 }
 .brand h1 .l2{font-size:1.5em}
-
-/* ---------- Sign-in, groups, super admin ---------- */
-.whoami{display:inline-flex;align-items:center;gap:8px;font-size:13px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 6px 4px 12px}
-.whoami .who-dot{width:10px;height:10px;border-radius:50%}
-.whoami select{font:inherit;font-size:12px;font-weight:600;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:3px 8px}
-.whoami .btn.sm{margin-left:0}
-.group-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:6px 0}
-.member-grid{width:100%;border-collapse:collapse;font-size:14px}
-.member-grid th,.member-grid td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:center}
-.member-grid th:first-child,.member-grid td:first-child{text-align:left}
-.member-grid th{font-size:12px;color:var(--muted);font-weight:600}
-.member-grid input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
-.login-wrap{display:block;max-width:420px;width:100%;margin:40px auto}
-.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
-.pill.ok{color:var(--green);border-color:rgba(52,211,153,.4)}

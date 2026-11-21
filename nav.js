@@ -35,30 +35,3 @@
     show(Store.sync.status());
     Store.sync.onStatus(show);
 })();
-
-/* Sign-in gate + who's signed in + which group you're looking at.
-   Pages other than login/admin/superadmin send you to the login screen until you sign in.
-   Loaded after nav.js on every page. */
-(function () {
-    const page = location.pathname.split("/").pop() || "index.html";
-    if (["login.html", "admin.html", "superadmin.html"].includes(page)) return;
-    const me = Store.session();
-    if (!me && Store.allProfiles().length) {
-        location.replace("login.html?next=" + encodeURIComponent(page + location.search));
-        return;
-    }
-    if (!me) return;
-    const mine = Store.myGroups(), cur = Store.activeGroup();
-    const box = document.createElement("div");
-    box.className = "whoami";
-    box.innerHTML = `<span class="who-dot" style="background:${Store.esc(me.color)}"></span><b>${Store.esc(me.name)}</b>` +
-        (mine.length > 1
-            ? `<select id="grp-switch" aria-label="Group">${mine.map(g => `<option value="${g.id}" ${g.id === cur ? "selected" : ""}>${Store.esc(g.name)}</option>`).join("")}</select>`
-            : `<span class="muted">${Store.esc(mine[0]?.name || "")}</span>`) +
-        `<button class="btn ghost sm" id="logout" type="button">Log out</button>`;
-    const stack = document.querySelector(".topbar .topright");
-    if (stack) stack.prepend(box); else document.querySelector(".nav").after(box);
-    const sw = box.querySelector("#grp-switch");
-    if (sw) sw.onchange = () => { Store.setActiveGroup(sw.value); location.reload(); };
-    box.querySelector("#logout").onclick = () => { Store.logout(); location.href = "login.html"; };
-})();
