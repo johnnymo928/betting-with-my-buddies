@@ -52,10 +52,42 @@ function owner(b, claims, sc) {
 const label = (b, side, i) => b.numbers ? b.numbers[side].slice(i * perOf(b), i * perOf(b) + perOf(b)).join(" · ") : "?";
 
 /* ---------- Page ---------- */
+// Next game first, then later ones; games that ended (over ~5 hours ago) go to the bottom, most recent first.
+function sortedBoards() {
+    const now = Date.now(), t = b => (b.start ? Date.parse(b.start) : Infinity), over = b => t(b) < now - 5 * 3600000;
+    return Store.squareBoards().sort((a, b) => over(a) - over(b) || (over(a) ? t(b) - t(a) : t(a) - t(b)));
+}
+const when = b => b.start ? " · " + new Date(b.start).toLocaleDateString([], { month: "short", day: "numeric" }) : "";
+/* Each player's squares and winnings on one board. */
+function tallyBoard(b) {
+    const claims = Store.squareClaims(b.id), pot = Object.keys(claims).length * b.price, t = {};
+    Object.values(claims).forEach(pid => (t[pid] ||= { sq: 0, owes: 0, won: 0 }).sq++);
+    Object.values(t).forEach(x => x.owes = x.sq * b.price);
+    (b.intervals || []).forEach(iv => {
+        const o = owner(b, claims, scoreAt(b, iv));
+        if (o?.pid) (t[o.pid] ||= { sq: 0, owes: 0, won: 0 }).won += pot * iv.pct / 100;
+    });
+    return t;
+}
+function renderAll(boards) {
+    $("sq-all-panel").hidden = boards.length < 2;
+    if (boards.length < 2) return;
+    const all = {};
+    boards.forEach(b => Object.entries(tallyBoard(b)).forEach(([pid, x]) => {
+        const a = (all[pid] ||= { boards: 0, sq: 0, owes: 0, won: 0 });
+        a.boards++; a.sq += x.sq; a.owes += x.owes; a.won += x.won;
+    }));
+    const net = x => x.won - x.owes;
+    const list = Object.entries(all).map(([pid, x]) => ({ p: Store.profile(pid), ...x })).filter(x => x.p).sort((x, y) => net(y) - net(x));
+    $("sq-all").innerHTML = `<tr><th>Player</th><th>Boards</th><th>Squares</th><th>Owes</th><th>Won</th><th>Net</th></tr>` + (list.length ? list.map(x =>
+        `<tr><td><b style="color:${esc(x.p.color)}">${esc(x.p.name)}</b></td><td>${x.boards}</td><td>${x.sq}</td><td>${money(x.owes)}</td><td>${money(x.won)}</td><td style="color:var(--${net(x) >= 0 ? "green" : "red"})">${money(net(x))}</td></tr>`
+    ).join("") : `<tr><td colspan="6" class="muted">No squares claimed yet.</td></tr>`);
+}
 function render() {
-    const boards = Store.squareBoards();
+    const boards = sortedBoards();
+    renderAll(boards);
     if (!boards.some(b => b.id === boardId)) boardId = boards[0]?.id || "";
-    $("sq-board").innerHTML = boards.length ? boards.map(b => `<option value="${esc(b.id)}" ${b.id === boardId ? "selected" : ""}>${esc(b.name)}</option>`).join("")
+    $("sq-board").innerHTML = boards.length ? boards.map(b => `<option value="${esc(b.id)}" ${b.id === boardId ? "selected" : ""}>${esc(b.name + when(b))}</option>`).join("")
         : `<option value="">No boards yet</option>`;
     const ps = Store.profiles();
     if (!ps.some(p => p.id === me)) me = "";
@@ -127,7 +159,8 @@ $("sq-grid-wrap").onclick = e => {
     render();
 };
 
-async function refresh() { await Store.autoDrawSquares(); render(); const b = Store.squareBoard(boardId); if (b) { await loadScore(b); render(); } }
+const loadAll = () => Promise.all(Store.squareBoards().map(loadScore));
+async function refresh() { await Store.autoDrawSquares(); render(); await loadAll(); render(); }
 window.addEventListener("storage", render);          // a sync pull brought new claims
 refresh();
-setInterval(() => { Store.autoDrawSquares().then(render); const b = Store.squareBoard(boardId); if (b && !document.hidden) loadScore(b).then(render); }, 60000);
+setInterval(() => { Store.autoDrawSquares().then(render); if (!document.hidden) loadAll().then(render); }, 60000);
