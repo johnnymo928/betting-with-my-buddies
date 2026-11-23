@@ -5,6 +5,7 @@
         ["bet.html", "Place Bet"],
         ["insights.html", "Insights"],
         ["pool.html", "Pool"],
+        ["squares.html", "Squares"],
         ["feedback.html", "Feedback"],
         ["admin.html", "Admin"]
     ];

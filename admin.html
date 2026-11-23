@@ -57,6 +57,34 @@
         </section>
 
         <section class="panel">
+            <div class="panel-head"><h2><span class="tag tag-gold">SQUARES</span> Squares Boards</h2></div>
+            <p class="hint">Make a 10 x 10 board for a game. Buddies claim squares on the Squares page; you draw the numbers when it is full (that locks it), and winners are called from the score at each interval you pick.</p>
+            <form id="sq-form" class="form" novalidate>
+                <label>Game
+                    <select id="sqf-league">
+                        <option value="nfl">NFL</option><option value="ncaaf">College football</option>
+                        <option value="nba">NBA</option><option value="custom">Custom game (no live scores)</option>
+                    </select>
+                </label>
+                <label id="sqf-game-wrap">Pick the game <select id="sqf-game"></select></label>
+                <div id="sqf-custom" hidden class="form inline">
+                    <input id="sqf-away" type="text" maxlength="20" placeholder="Away team" aria-label="Away team">
+                    <input id="sqf-home" type="text" maxlength="20" placeholder="Home team" aria-label="Home team">
+                </div>
+                <label>Price per square ($)
+                    <input id="sqf-price" type="number" min="0" step="0.5" value="10" inputmode="decimal">
+                </label>
+                <div>
+                    <div class="hint">Intervals to pay out, and the share of the pot each one wins (shares must add up to 100%).</div>
+                    <div id="sqf-ivs"></div>
+                </div>
+                <p class="form-error" id="sqf-error" role="alert"></p>
+                <button class="btn primary" type="submit">Create board</button>
+            </form>
+            <div id="sq-list"></div>
+        </section>
+
+        <section class="panel">
             <div class="panel-head"><h2><span class="tag">POOL</span> NFL Pool</h2></div>
             <p class="hint">Hide the Pool from the menu and block the page for everyone. Picks are kept and come back when you show it again.</p>
             <div class="odds-status" id="pool-status"></div>

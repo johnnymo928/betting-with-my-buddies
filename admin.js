@@ -13,7 +13,7 @@ function showGate(msg) {
 }
 function showTools() {
     $("gate").hidden = true; $("tools").hidden = false;
-    renderProfiles(); renderBets(); renderComments(); renderPool();
+    renderProfiles(); renderBets(); renderComments(); renderPool(); renderSquares(); loadSqGames();
     $("odds-panel").hidden = !Odds.enabled;                     // hidden while odds are off
     if (Odds.enabled) checkOdds();
 }
@@ -183,5 +183,90 @@ $("import").onchange = async e => {
     } catch (err) { $("data-msg").textContent = err.message; }
     e.target.value = "";
 };
+
+/* ---------- Squares boards ---------- */
+const SQ_IVS = [["q1", "End of Q1", 25], ["q2", "Halftime", 25], ["q3", "End of Q3", 25], ["final", "Final", 25]];
+let sqGames = [];
+$("sqf-ivs").innerHTML = SQ_IVS.map(([k, l, p]) => `<div class="iv"><label><input type="checkbox" data-iv="${k}" checked> ${l}</label>
+    <input type="number" min="0" max="100" step="1" value="${p}" data-pct="${k}" aria-label="${l} share %"> %</div>`).join("");
+
+async function loadSqGames() {
+    const lg = $("sqf-league").value, custom = lg === "custom";
+    $("sqf-game-wrap").hidden = custom; $("sqf-custom").hidden = !custom;
+    if (custom) return;
+    $("sqf-game").innerHTML = `<option>Loading&hellip;</option>`;
+    try {
+        sqGames = await Live.games(lg);
+        $("sqf-game").innerHTML = sqGames.length
+            ? sqGames.map((g, i) => `<option value="${i}">${esc(g.label)} · ${esc(g.detail)}</option>`).join("")
+            : `<option value="">No upcoming games found</option>`;
+    } catch { $("sqf-game").innerHTML = `<option value="">Couldn't load games</option>`; sqGames = []; }
+}
+$("sqf-league").onchange = loadSqGames;
+
+$("sq-form").onsubmit = e => {
+    e.preventDefault();
+    const err = $("sqf-error"); err.textContent = "";
+    const price = Number($("sqf-price").value);
+    if (!(price >= 0)) return void (err.textContent = "Enter a price per square.");
+    const intervals = SQ_IVS.filter(([k]) => document.querySelector(`[data-iv="${k}"]`).checked)
+        .map(([k, l]) => ({ key: k, label: l, pct: Number(document.querySelector(`[data-pct="${k}"]`).value) || 0 }));
+    if (!intervals.length) return void (err.textContent = "Pick at least one interval.");
+    if (Math.abs(intervals.reduce((s, i) => s + i.pct, 0) - 100) > 0.001) return void (err.textContent = "The shares have to add up to 100%.");
+    let b;
+    if ($("sqf-league").value === "custom") {
+        const a = $("sqf-away").value.trim(), h = $("sqf-home").value.trim();
+        if (!a || !h) return void (err.textContent = "Enter both team names.");
+        b = { name: `${a} vs ${h}`, away: { abbr: a.slice(0, 4).toUpperCase(), name: a }, home: { abbr: h.slice(0, 4).toUpperCase(), name: h } };
+    } else {
+        const g = sqGames[Number($("sqf-game").value)];
+        if (!g) return void (err.textContent = "Pick a game.");
+        const [a, h] = g.teams;
+        b = { name: g.label, league: $("sqf-league").value, gameId: g.id, start: g.start,
+              away: { abbr: a.abbr, name: a.name }, home: { abbr: h.abbr, name: h.name } };
+    }
+    Store.saveSquareBoard({ ...b, price, intervals, numbers: null, manual: {} });
+    $("sqf-away").value = $("sqf-home").value = "";
+    renderSquares();
+};
+
+const shuffle = () => { const a = [...Array(10).keys()]; for (let i = 9; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+function renderSquares() {
+    const boards = Store.squareBoards();
+    $("sq-list").innerHTML = boards.map(b => {
+        const sold = Object.keys(Store.squareClaims(b.id)).length;
+        return `<div class="sq-admin" data-id="${esc(b.id)}">
+            <div><b>${esc(b.name)}</b> <span class="muted">· $${b.price}/square · ${sold}/100 sold · ${b.numbers ? "numbers drawn (locked)" : "open"}</span></div>
+            <div class="row-btns">
+                <button class="btn primary" data-act="draw" type="button">${b.numbers ? "Redraw numbers" : "Draw numbers &amp; lock"}</button>
+                ${b.numbers ? `<button class="btn ghost" data-act="clear" type="button">Clear numbers (reopen)</button>` : ""}
+                <button class="btn danger" data-act="del" type="button">Delete board</button>
+            </div>
+            <div class="hint">${b.league ? "Scores come from ESPN. " : ""}Type a score here to override it (or to call the interval by hand):</div>
+            ${b.intervals.map(iv => { const m = b.manual?.[iv.key] || []; return `<div class="iv">${esc(iv.label)}:
+                ${esc(b.away.abbr)} <input type="number" min="0" data-m="${iv.key}:0" value="${m[0] ?? ""}">
+                ${esc(b.home.abbr)} <input type="number" min="0" data-m="${iv.key}:1" value="${m[1] ?? ""}"></div>`; }).join("")}
+        </div>`;
+    }).join("") || `<div class="empty">No boards yet.</div>`;
+}
+$("sq-list").onclick = e => {
+    const act = e.target.dataset.act; if (!act) return;
+    const id = e.target.closest(".sq-admin").dataset.id, b = Store.squareBoard(id);
+    if (act === "del") { if (confirm(`Delete "${b.name}" and all its claimed squares? This can't be undone.`)) Store.deleteSquareBoard(id); }
+    else if (act === "draw") {
+        if (b.numbers && !confirm("Draw new numbers? The old ones are lost.")) return;
+        Store.saveSquareBoard({ ...b, numbers: { away: shuffle(), home: shuffle() } });
+    } else if (act === "clear") Store.saveSquareBoard({ ...b, numbers: null });
+    renderSquares();
+};
+$("sq-list").onchange = e => {
+    const k = e.target.dataset.m; if (!k) return;
+    const [key, side] = k.split(":"), id = e.target.closest(".sq-admin").dataset.id, b = Store.squareBoard(id);
+    const manual = { ...(b.manual || {}) }, cur = [...(manual[key] || [null, null])];
+    cur[Number(side)] = e.target.value === "" ? null : Number(e.target.value);
+    if (cur[0] === null && cur[1] === null) delete manual[key]; else manual[key] = cur;
+    Store.saveSquareBoard({ ...b, manual });
+};
+window.addEventListener("storage", () => { if (!$("tools").hidden && !$("sq-list").contains(document.activeElement)) renderSquares(); });
 
 showGate();

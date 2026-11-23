@@ -246,7 +246,7 @@ const Store = (() => {
        survivor: one pick per player per week (id is per week, so choosing again replaces it)
        pickem:   one pick per player per game */
     const SETTING = "setting:pool-hidden";          // admin switch, stored as a special pick record so it syncs to everyone
-    const picks = () => db.picks.filter(p => p.id !== SETTING);
+    const picks = () => db.picks.filter(p => p.mode === "survivor" || p.mode === "pickem");
     // hidden unless an admin has explicitly shown it
     const poolHidden = () => { const r = db.picks.find(p => p.id === SETTING); return !r || r.hidden !== false; };
     function setPoolHidden(hidden) {
@@ -268,6 +268,40 @@ const Store = (() => {
         const p = { ...r, id, createdAt: Date.now() };
         db.picks = db.picks.filter(x => x.id !== id); db.picks.push(p);
         save(); push({ action: "upsert", kind: "pick", record: p }); return p;
+    }
+
+    /* ---------- Squares boards ----------
+       Stored as extra records in the picks list (so they sync with no sheet-script change).
+       board = { id: "sqb:..", mode: "sqboard", name, price, league, gameId, away, home, start,
+                 intervals: [{ key, label, pct }], numbers: null | { away: [10 digits], home: [10 digits] }, manual: { key: [away, home] } }
+       claim = { id: "sq:<boardId>:<0-99>", mode: "sq", boardId, n, profileId }   (profileId "_" = free)
+       n = row * 10 + col: the columns carry the away team's digits, the rows the home team's. */
+    const squareBoards = () => db.picks.filter(p => p.mode === "sqboard").sort((a, b) => b.createdAt - a.createdAt);
+    const squareBoard = id => db.picks.find(p => p.id === id && p.mode === "sqboard");
+    const squareClaims = bid => { const m = {}; db.picks.forEach(p => { if (p.mode === "sq" && p.boardId === bid && p.profileId !== "_") m[p.n] = p.profileId; }); return m; };
+    const putPick = r => { db.picks = db.picks.filter(p => p.id !== r.id); db.picks.push(r); save(); push({ action: "upsert", kind: "pick", record: r }); return r; };
+    function saveSquareBoard(b) {                       // admin: create or change a board
+        const r = { profileId: "_", eventId: "_", teamId: "_", createdAt: Date.now(), ...b, mode: "sqboard", id: b.id || "sqb:" + uid() };
+        return putPick(r);
+    }
+    function claimSquare(bid, n, profileId) {
+        const b = squareBoard(bid);
+        if (!b) throw new Error("That board is gone.");
+        if (b.numbers) throw new Error("The numbers are drawn, so the squares are locked.");
+        if (!profile(profileId)) throw new Error("Pick your profile first.");
+        if (squareClaims(bid)[n]) throw new Error("Somebody already took that square.");
+        putPick({ id: `sq:${bid}:${n}`, mode: "sq", boardId: bid, n, profileId, eventId: bid, teamId: "_", createdAt: Date.now() });
+    }
+    function releaseSquare(bid, n, profileId) {
+        const b = squareBoard(bid);
+        if (b?.numbers) throw new Error("The numbers are drawn, so the squares are locked.");
+        if (squareClaims(bid)[n] !== profileId) return;
+        putPick({ id: `sq:${bid}:${n}`, mode: "sq", boardId: bid, n, profileId: "_", eventId: bid, teamId: "_", createdAt: Date.now() });
+    }
+    function deleteSquareBoard(bid) {                    // admin
+        const gone = db.picks.filter(p => p.id === bid || (p.mode === "sq" && p.boardId === bid));
+        db.picks = db.picks.filter(p => !gone.includes(p)); save();
+        gone.forEach(p => push({ action: "remove", kind: "pick", id: p.id }));
     }
 
     // Manual changes lock a leg so live grading never overrides them;
@@ -400,7 +434,7 @@ const Store = (() => {
     return {
         sync: { enabled: !!cfg, status: () => syncStatus, pending, onStatus: f => statusListeners.push(f), pull },
         COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
-        comments, allComments, addComment, removeComment, picks, setPick, poolHidden, setPoolHidden,
+        comments, allComments, addComment, removeComment, picks, setPick, poolHidden, setPoolHidden, squareBoards, squareBoard, squareClaims, saveSquareBoard, claimSquare, releaseSquare, deleteSquareBoard,
         bets, removedBets, addBet, setLegStatus, recentHits, recentLosses, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
         adminLogin, adminLogout, isAdmin, adminPost, exportData, importData,
         reload() { db = Object.assign(EMPTY(), load()); }
