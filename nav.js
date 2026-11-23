@@ -6,6 +6,7 @@
         ["insights.html", "Insights"],
         ["pool.html", "Pool"],
         ["squares.html", "Squares"],
+        ["flags.html", "Flags"],
         ["feedback.html", "Feedback"],
         ["admin.html", "Admin"]
     ];

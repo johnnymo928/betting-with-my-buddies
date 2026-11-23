@@ -280,6 +280,9 @@ const Store = (() => {
     const squareBoard = id => db.picks.find(p => p.id === id && p.mode === "sqboard");
     const squareClaims = bid => { const m = {}; db.picks.forEach(p => { if (p.mode === "sq" && p.boardId === bid && p.profileId !== "_") m[p.n] = p.profileId; }); return m; };
     const putPick = r => { db.picks = db.picks.filter(p => p.id !== r.id); db.picks.push(r); save(); push({ action: "upsert", kind: "pick", record: r }); return r; };
+    // generic shared records for other games (Flags): saved as extra pick records, so they sync with no script change
+    const recs = mode => db.picks.filter(p => p.mode === mode);
+    const putRec = r => putPick({ profileId: "_", eventId: "_", teamId: "_", createdAt: Date.now(), ...r });
     function saveSquareBoard(b) {                       // admin: create or change a board
         const r = { profileId: "_", eventId: "_", teamId: "_", createdAt: Date.now(), ...b, mode: "sqboard", id: b.id || "sqb:" + uid() };
         return putPick(r);
@@ -445,7 +448,7 @@ const Store = (() => {
     return {
         sync: { enabled: !!cfg, status: () => syncStatus, pending, onStatus: f => statusListeners.push(f), pull },
         COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
-        comments, allComments, addComment, removeComment, picks, setPick, poolHidden, setPoolHidden, squareBoards, squareBoard, squareClaims, autoDrawSquares, sqLocked, saveSquareBoard, claimSquare, releaseSquare, deleteSquareBoard,
+        comments, allComments, addComment, removeComment, picks, setPick, poolHidden, setPoolHidden, recs, putRec, uid, squareBoards, squareBoard, squareClaims, autoDrawSquares, sqLocked, saveSquareBoard, claimSquare, releaseSquare, deleteSquareBoard,
         bets, removedBets, addBet, setLegStatus, recentHits, recentLosses, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
         adminLogin, adminLogout, isAdmin, adminPost, exportData, importData,
         reload() { db = Object.assign(EMPTY(), load()); }
