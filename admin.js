@@ -190,9 +190,19 @@ let sqGames = [];
 $("sqf-ivs").innerHTML = SQ_IVS.map(([k, l, p]) => `<div class="iv"><label><input type="checkbox" data-iv="${k}" checked> ${l}</label>
     <input type="number" min="0" max="100" step="1" value="${p}" data-pct="${k}" aria-label="${l} share %"> %</div>`).join("");
 
+const SQ_PRESETS = { quarters: { q1: 25, q2: 25, q3: 25, final: 25 }, halves: { q2: 50, final: 50 }, full: { final: 100 } };
+function applyPreset() {
+    const p = SQ_PRESETS[$("sqf-preset").value]; if (!p) return;
+    SQ_IVS.forEach(([k]) => {
+        document.querySelector(`[data-iv="${k}"]`).checked = k in p;
+        document.querySelector(`[data-pct="${k}"]`).value = p[k] ?? 0;
+    });
+}
+$("sqf-preset").onchange = applyPreset;
+$("sqf-ivs").addEventListener("input", () => { $("sqf-preset").value = "custom"; });      // hand edits switch it to Custom
 async function loadSqGames() {
     const lg = $("sqf-league").value, custom = lg === "custom";
-    $("sqf-game-wrap").hidden = custom; $("sqf-custom").hidden = !custom;
+    $("sqf-game-wrap").hidden = custom; $("sqf-custom").hidden = !custom; $("sqf-start-wrap").hidden = !custom;
     if (custom) return;
     $("sqf-game").innerHTML = `<option>Loading&hellip;</option>`;
     try {
@@ -217,7 +227,9 @@ $("sq-form").onsubmit = e => {
     if ($("sqf-league").value === "custom") {
         const a = $("sqf-away").value.trim(), h = $("sqf-home").value.trim();
         if (!a || !h) return void (err.textContent = "Enter both team names.");
-        b = { name: `${a} vs ${h}`, away: { abbr: a.slice(0, 4).toUpperCase(), name: a }, home: { abbr: h.slice(0, 4).toUpperCase(), name: h } };
+        const st = $("sqf-start").value ? Date.parse($("sqf-start").value) : NaN;
+        if ($("sqf-auto").checked && !Number.isFinite(st)) return void (err.textContent = "Enter the game start so the numbers know when to draw.");
+        b = { start: Number.isFinite(st) ? new Date(st).toISOString() : null, name: `${a} vs ${h}`, away: { abbr: a.slice(0, 4).toUpperCase(), name: a }, home: { abbr: h.slice(0, 4).toUpperCase(), name: h } };
     } else {
         const g = sqGames[Number($("sqf-game").value)];
         if (!g) return void (err.textContent = "Pick a game.");
@@ -225,7 +237,10 @@ $("sq-form").onsubmit = e => {
         b = { name: g.label, league: $("sqf-league").value, gameId: g.id, start: g.start,
               away: { abbr: a.abbr, name: a.name }, home: { abbr: h.abbr, name: h.name } };
     }
-    Store.saveSquareBoard({ ...b, price, intervals, numbers: null, manual: {} });
+    const startMs = b.start ? Date.parse(b.start) : NaN;
+    const drawAt = $("sqf-auto").checked && Number.isFinite(startMs) ? startMs - 24 * 3600000 : null;
+    if ($("sqf-auto").checked && drawAt === null) return void (err.textContent = "That game has no start time, so it can't auto-draw. Untick the box to draw by hand.");
+    Store.saveSquareBoard({ ...b, drawAt, price, intervals, per: Number($("sqf-per").value) === 2 ? 2 : 1, numbers: null, manual: {} });
     $("sqf-away").value = $("sqf-home").value = "";
     renderSquares();
 };
@@ -234,9 +249,9 @@ const shuffle = () => { const a = [...Array(10).keys()]; for (let i = 9; i > 0; 
 function renderSquares() {
     const boards = Store.squareBoards();
     $("sq-list").innerHTML = boards.map(b => {
-        const sold = Object.keys(Store.squareClaims(b.id)).length;
+        const sold = Object.keys(Store.squareClaims(b.id)).length, total = b.per === 2 ? 25 : 100;
         return `<div class="sq-admin" data-id="${esc(b.id)}">
-            <div><b>${esc(b.name)}</b> <span class="muted">· $${b.price}/square · ${sold}/100 sold · ${b.numbers ? "numbers drawn (locked)" : "open"}</span></div>
+            <div><b>${esc(b.name)}</b> <span class="muted">· $${b.price}/square · ${sold}/${total} sold · ${b.numbers ? "numbers drawn (locked)" : b.drawAt ? "open until " + new Date(b.drawAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + " (auto-draw)" : "open (draw by hand)"}</span></div>
             <div class="row-btns">
                 <button class="btn primary" data-act="draw" type="button">${b.numbers ? "Redraw numbers" : "Draw numbers &amp; lock"}</button>
                 ${b.numbers ? `<button class="btn ghost" data-act="clear" type="button">Clear numbers (reopen)</button>` : ""}
@@ -256,7 +271,7 @@ $("sq-list").onclick = e => {
     else if (act === "draw") {
         if (b.numbers && !confirm("Draw new numbers? The old ones are lost.")) return;
         Store.saveSquareBoard({ ...b, numbers: { away: shuffle(), home: shuffle() } });
-    } else if (act === "clear") Store.saveSquareBoard({ ...b, numbers: null });
+    } else if (act === "clear") Store.saveSquareBoard({ ...b, numbers: null, drawAt: null });          // reopened by hand, so no auto-draw
     renderSquares();
 };
 $("sq-list").onchange = e => {

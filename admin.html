@@ -71,10 +71,28 @@
                     <input id="sqf-away" type="text" maxlength="20" placeholder="Away team" aria-label="Away team">
                     <input id="sqf-home" type="text" maxlength="20" placeholder="Home team" aria-label="Home team">
                 </div>
+                <label id="sqf-start-wrap" hidden>Game start (numbers draw 1 day before)
+                    <input id="sqf-start" type="datetime-local">
+                </label>
+                <label class="check"><input id="sqf-auto" type="checkbox" checked> Draw the numbers automatically, at random, 1 day before the game</label>
+                <label>Numbers per row and column
+                    <select id="sqf-per">
+                        <option value="1">1 number: 10 rows x 10 columns (100 squares)</option>
+                        <option value="2">2 numbers: 5 rows x 5 columns (25 squares)</option>
+                    </select>
+                </label>
                 <label>Price per square ($)
                     <input id="sqf-price" type="number" min="0" step="0.5" value="10" inputmode="decimal">
                 </label>
                 <div>
+                    <label>Winnings paid
+                        <select id="sqf-preset">
+                            <option value="quarters">Every quarter (Q1, half, Q3, final: 25% each)</option>
+                            <option value="halves">Each half (halftime 50%, final 50%)</option>
+                            <option value="full">Full game only (final: 100%)</option>
+                            <option value="custom">Custom (set it below)</option>
+                        </select>
+                    </label>
                     <div class="hint">Intervals to pay out, and the share of the pot each one wins (shares must add up to 100%).</div>
                     <div id="sqf-ivs"></div>
                 </div>

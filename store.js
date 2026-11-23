@@ -284,17 +284,28 @@ const Store = (() => {
         const r = { profileId: "_", eventId: "_", teamId: "_", createdAt: Date.now(), ...b, mode: "sqboard", id: b.id || "sqb:" + uid() };
         return putPick(r);
     }
+    // a board locks when its numbers are drawn, or once its auto-draw time (a day before the game) has come
+    const sqLocked = b => !!b.numbers || (!!b.drawAt && Date.now() >= b.drawAt);
+    const shuffle10 = () => { const a = [...Array(10).keys()]; for (let i = 9; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    // Draws random numbers for every board whose draw time has come. Pulls the sheet first so a draw someone
+    // else already made is used instead of drawing again.
+    async function autoDrawSquares() {
+        if (!squareBoards().some(b => !b.numbers && b.drawAt && Date.now() >= b.drawAt)) return;
+        try { await pull(); } catch {}
+        squareBoards().filter(b => !b.numbers && b.drawAt && Date.now() >= b.drawAt)
+            .forEach(b => saveSquareBoard({ ...b, numbers: { away: shuffle10(), home: shuffle10() } }));
+    }
     function claimSquare(bid, n, profileId) {
         const b = squareBoard(bid);
         if (!b) throw new Error("That board is gone.");
-        if (b.numbers) throw new Error("The numbers are drawn, so the squares are locked.");
+        if (sqLocked(b)) throw new Error("The numbers are drawn, so the squares are locked.");
         if (!profile(profileId)) throw new Error("Pick your profile first.");
         if (squareClaims(bid)[n]) throw new Error("Somebody already took that square.");
         putPick({ id: `sq:${bid}:${n}`, mode: "sq", boardId: bid, n, profileId, eventId: bid, teamId: "_", createdAt: Date.now() });
     }
     function releaseSquare(bid, n, profileId) {
         const b = squareBoard(bid);
-        if (b?.numbers) throw new Error("The numbers are drawn, so the squares are locked.");
+        if (b && sqLocked(b)) throw new Error("The numbers are drawn, so the squares are locked.");
         if (squareClaims(bid)[n] !== profileId) return;
         putPick({ id: `sq:${bid}:${n}`, mode: "sq", boardId: bid, n, profileId: "_", eventId: bid, teamId: "_", createdAt: Date.now() });
     }
@@ -434,7 +445,7 @@ const Store = (() => {
     return {
         sync: { enabled: !!cfg, status: () => syncStatus, pending, onStatus: f => statusListeners.push(f), pull },
         COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
-        comments, allComments, addComment, removeComment, picks, setPick, poolHidden, setPoolHidden, squareBoards, squareBoard, squareClaims, saveSquareBoard, claimSquare, releaseSquare, deleteSquareBoard,
+        comments, allComments, addComment, removeComment, picks, setPick, poolHidden, setPoolHidden, squareBoards, squareBoard, squareClaims, autoDrawSquares, sqLocked, saveSquareBoard, claimSquare, releaseSquare, deleteSquareBoard,
         bets, removedBets, addBet, setLegStatus, recentHits, recentLosses, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
         adminLogin, adminLogout, isAdmin, adminPost, exportData, importData,
         reload() { db = Object.assign(EMPTY(), load()); }

@@ -40,11 +40,16 @@ function scoreAt(b, iv) {
     return [sum(s.away), sum(s.home)];
 }
 
+/* per = digits covered by each row/column: 1 gives a 10 x 10 board, 2 gives 5 x 5 with two digits per row and column. */
+const sizeOf = b => 10 / (b.per === 2 ? 2 : 1);
+const perOf = b => (b.per === 2 ? 2 : 1);
 function owner(b, claims, sc) {
     if (!b.numbers || !sc) return null;
-    const col = b.numbers.away.indexOf(sc[0] % 10), row = b.numbers.home.indexOf(sc[1] % 10);
-    return col < 0 || row < 0 ? null : { n: row * 10 + col, pid: claims[row * 10 + col] || null };
+    const S = sizeOf(b), per = perOf(b);
+    const col = Math.floor(b.numbers.away.indexOf(sc[0] % 10) / per), row = Math.floor(b.numbers.home.indexOf(sc[1] % 10) / per);
+    return b.numbers.away.indexOf(sc[0] % 10) < 0 || b.numbers.home.indexOf(sc[1] % 10) < 0 ? null : { n: row * S + col, pid: claims[row * S + col] || null };
 }
+const label = (b, side, i) => b.numbers ? b.numbers[side].slice(i * perOf(b), i * perOf(b) + perOf(b)).join(" · ") : "?";
 
 /* ---------- Page ---------- */
 function render() {
@@ -65,12 +70,14 @@ function render() {
         $("sq-grid-wrap").innerHTML = `<div class="empty">No squares board has been set up. An admin creates one on the Admin page.</div>`;
         return;
     }
+    const S = sizeOf(b), total = S * S, idx = [...Array(S).keys()];
     const claims = Store.squareClaims(b.id), sold = Object.keys(claims).length, pot = sold * b.price;
     $("sq-title").textContent = b.name;
-    $("sq-info").textContent = `${sold}/100 sold · pot ${money(pot)}`;
+    $("sq-info").textContent = `${sold}/${total} sold · pot ${money(pot)}`;
     $("sq-rules").textContent = b.numbers
         ? "Numbers are drawn and the squares are locked. The last digit of each team's score at each interval picks the winner."
-        : `Squares are ${money(b.price)} each. Tap an empty square to claim it, tap yours to give it back. Numbers are drawn by the admin once the board is ready, which locks it.`;
+        : Store.sqLocked(b) ? "Picking is closed. The numbers are being drawn."
+        : `Squares are ${money(b.price)} each. Tap an empty square to claim it, tap yours to give it back. ${b.drawAt ? "The numbers are drawn at random on " + new Date(b.drawAt).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + " (1 day before the game), and that locks the board." : "The admin draws the numbers when the board is ready, which locks it."}`;
 
     // winners per interval
     const wins = (b.intervals || []).map(iv => {
@@ -79,15 +86,15 @@ function render() {
     });
     const winSq = new Set(wins.filter(w => w.o).map(w => w.o.n));
 
-    const head = `<tr><th class="sq-corner"></th>${[...Array(10).keys()].map(c => `<th class="sq-top">${b.numbers ? b.numbers.away[c] : "?"}</th>`).join("")}</tr>`;
-    const rows = [...Array(10).keys()].map(r => `<tr><th class="sq-side">${b.numbers ? b.numbers.home[r] : "?"}</th>${[...Array(10).keys()].map(c => {
-        const n = r * 10 + c, pid = claims[n], p = pid && Store.profile(pid);
+    const head = `<tr><th class="sq-corner"></th>${idx.map(c => `<th class="sq-top">${label(b, "away", c)}</th>`).join("")}</tr>`;
+    const rows = idx.map(r => `<tr><th class="sq-side">${label(b, "home", r)}</th>${idx.map(c => {
+        const n = r * S + c, pid = claims[n], p = pid && Store.profile(pid);
         const cls = ["sq-cell", pid ? "taken" : "free", pid === me ? "mine" : "", winSq.has(n) ? "win" : ""].join(" ");
         return `<td><button type="button" class="${cls}" data-n="${n}" ${p ? `style="--c:${esc(p.color)}"` : ""} title="${p ? esc(p.name) : "Open"}">${p ? esc(p.name.slice(0, 3)) : ""}</button></td>`;
     }).join("")}</tr>`).join("");
     $("sq-grid-wrap").innerHTML = `<div class="sq-axis"><span>${esc(b.away.name)} &rarr;</span></div>
         <div class="sq-flex"><div class="sq-axis-v"><span>${esc(b.home.name)} &darr;</span></div>
-        <table class="sq-grid"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
+        <table class="sq-grid ${S === 5 ? "big" : ""}"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
 
     $("sq-winners").innerHTML = `<tr><th>Interval</th><th>Share</th><th>Prize</th><th>Score</th><th>Winner</th></tr>` + wins.map(w => {
         const sc = w.sc ? `${esc(b.away.abbr)} ${w.sc[0]} – ${esc(b.home.abbr)} ${w.sc[1]}` : "—";
@@ -120,7 +127,7 @@ $("sq-grid-wrap").onclick = e => {
     render();
 };
 
-async function refresh() { render(); const b = Store.squareBoard(boardId); if (b) { await loadScore(b); render(); } }
+async function refresh() { await Store.autoDrawSquares(); render(); const b = Store.squareBoard(boardId); if (b) { await loadScore(b); render(); } }
 window.addEventListener("storage", render);          // a sync pull brought new claims
 refresh();
-setInterval(() => { const b = Store.squareBoard(boardId); if (b && !document.hidden) loadScore(b).then(render); }, 60000);
+setInterval(() => { Store.autoDrawSquares().then(render); const b = Store.squareBoard(boardId); if (b && !document.hidden) loadScore(b).then(render); }, 60000);

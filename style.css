@@ -666,6 +666,10 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
 .sq-cell.taken{background:var(--c,#3ea6ff);border-color:var(--c,#3ea6ff)}
 .sq-cell.mine{outline:2px solid #fff;outline-offset:1px}
 .sq-cell.win{outline:3px solid #f5b942;outline-offset:1px;box-shadow:0 0 14px rgba(245,185,66,.8)}
+.sq-grid.big th{width:56px;font-size:17px}
+.sq-grid.big .sq-cell{width:min(15vw,84px);height:min(15vw,84px);font-size:15px}
+.form label.check{display:flex;flex-direction:row;align-items:center;gap:8px;font-weight:500}
+.form label.check input{width:auto;flex:none}
 .sq-admin{border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0;display:grid;gap:10px}
 .sq-admin .iv,#sqf-ivs .iv{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
 .sq-admin .iv input[type=number],#sqf-ivs .iv input[type=number]{width:80px;flex:none;padding:8px}
