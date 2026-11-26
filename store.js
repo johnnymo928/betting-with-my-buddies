@@ -246,7 +246,7 @@ const Store = (() => {
        survivor: one pick per player per week (id is per week, so choosing again replaces it)
        pickem:   one pick per player per game */
     const SETTING = "setting:pool-hidden";          // admin switch, stored as a special pick record so it syncs to everyone
-    const picks = () => db.picks.filter(p => p.mode === "survivor" || p.mode === "pickem");
+    const picks = () => db.picks.filter(p => (p.mode === "survivor" || p.mode === "pickem") && !p.cleared);
     // hidden unless an admin has explicitly shown it
     const poolHidden = () => { const r = db.picks.find(p => p.id === SETTING); return !r || r.hidden !== false; };
     function setPoolHidden(hidden) {
@@ -259,10 +259,10 @@ const Store = (() => {
         if (!profile(r.profileId)) throw new Error("Pick your profile first.");
         if (Date.parse(r.start) <= Date.now()) throw new Error("That game has already kicked off.");
         const id = r.mode === "survivor" ? `sv:${r.profileId}:${r.season}:${r.week}` : `pe:${r.profileId}:${r.eventId}`;
-        const old = db.picks.find(p => p.id === id);
+        const old = db.picks.find(p => p.id === id && !p.cleared);
         if (old && old.eventId !== r.eventId && Date.parse(old.start) <= Date.now())
             throw new Error("Your pick for this week is locked: its game already kicked off.");
-        if (r.mode === "survivor" && db.picks.some(p => p.mode === "survivor" && p.profileId === r.profileId &&
+        if (r.mode === "survivor" && picks().some(p => p.mode === "survivor" && p.profileId === r.profileId &&
                 p.season === r.season && p.week !== r.week && p.teamId === r.teamId))
             throw new Error(`You already used ${r.teamName} in an earlier week.`);
         const p = { ...r, id, createdAt: Date.now() };
@@ -316,6 +316,17 @@ const Store = (() => {
         const gone = db.picks.filter(p => p.id === bid || (p.mode === "sq" && p.boardId === bid));
         db.picks = db.picks.filter(p => !gone.includes(p)); save();
         gone.forEach(p => push({ action: "remove", kind: "pick", id: p.id }));
+    }
+
+    // Un-pick a game. Saved as a "cleared" pick (the sheet only lets an admin delete rows), which every list ignores.
+    function clearPick(r) {
+        const id = r.mode === "survivor" ? `sv:${r.profileId}:${r.season}:${r.week}` : `pe:${r.profileId}:${r.eventId}`;
+        const old = db.picks.find(p => p.id === id && !p.cleared);
+        if (!old || old.eventId !== r.eventId) return;
+        if (Date.parse(old.start) <= Date.now()) throw new Error("That game has already kicked off, so the pick is locked.");
+        const p = { ...old, cleared: true, createdAt: Date.now() };
+        db.picks = db.picks.filter(x => x.id !== id); db.picks.push(p);
+        save(); push({ action: "upsert", kind: "pick", record: p });
     }
 
     // Manual changes lock a leg so live grading never overrides them;
@@ -448,7 +459,7 @@ const Store = (() => {
     return {
         sync: { enabled: !!cfg, status: () => syncStatus, pending, onStatus: f => statusListeners.push(f), pull },
         COLORS, esc, profiles, profile, addProfile, updateProfile, deleteProfile,
-        comments, allComments, addComment, removeComment, picks, setPick, poolHidden, setPoolHidden, recs, putRec, uid, squareBoards, squareBoard, squareClaims, autoDrawSquares, sqLocked, saveSquareBoard, claimSquare, releaseSquare, deleteSquareBoard,
+        comments, allComments, addComment, removeComment, picks, setPick, clearPick, poolHidden, setPoolHidden, recs, putRec, uid, squareBoards, squareBoard, squareClaims, autoDrawSquares, sqLocked, saveSquareBoard, claimSquare, releaseSquare, deleteSquareBoard,
         bets, removedBets, addBet, setLegStatus, recentHits, recentLosses, removeBet, restoreBet, deleteBet, betStatus, betProfit, multiplier, exposure, fmtOdds, money,
         adminLogin, adminLogout, isAdmin, adminPost, exportData, importData,
         reload() { db = Object.assign(EMPTY(), load()); }

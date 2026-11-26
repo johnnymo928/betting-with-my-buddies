@@ -112,15 +112,15 @@ function drawGames() {
     const sv = mode === "survivor" && pid ? survivorState(pid) : null;
     const usedElsewhere = new Set(mode === "survivor" && pid
         ? picksOf(pid, "survivor").filter(p => p.week !== board.week).map(p => p.teamId) : []);
-    const mine = pid ? picksOf(pid, mode).filter(p => mode === "survivor" ? p.week === board.week : true) : [];
-    const chosen = new Set(mine.map(p => p.teamId));
+    // a team is "picked" only for the specific game it was picked in (not every game that team plays)
+    const chosen = new Set((pid ? picksOf(pid, mode) : []).map(p => p.eventId + ":" + p.teamId));
 
     if (sv && !sv.alive) $("rules").textContent = `You're out: ${sv.why} in week ${sv.outWeek}. You can still watch the standings.`;
 
     box.innerHTML = `<div class="pool-games">${board.events.map(ev => {
         const locked = started(ev);
         const btn = t => {
-            const on = chosen.has(t.id), used = usedElsewhere.has(t.id), out = sv && !sv.alive;
+            const on = chosen.has(ev.id + ":" + t.id), used = usedElsewhere.has(t.id), out = sv && !sv.alive;
             const res = on && finals[ev.id] ? (finals[ev.id] === t.id ? " ✓" : " ✗") : "";
             const disabled = !pid || locked || used || out;
             return `<button type="button" class="team-pick ${on ? "on" : ""} ${on && finals[ev.id] ? (finals[ev.id] === t.id ? "won" : "lost") : ""}"
@@ -178,8 +178,8 @@ function render() {
         b.classList.toggle("on", b.dataset.mode === mode); b.setAttribute("aria-checked", b.dataset.mode === mode);
     });
     $("rules").textContent = mode === "survivor"
-        ? "Pick one team to win this week. If it loses or ties, you're out. You can't use a team twice. Miss a week and you're out. Change your pick any time before that game kicks off."
-        : "Pick the winner of every game. Most correct picks wins. Change a pick any time before that game kicks off.";
+        ? "Pick one team to win this week. If it loses or ties, you're out. You can't use a team twice. Miss a week and you're out. Change your pick, or tap it again to clear it, any time before that game kicks off."
+        : "Pick the winner of every game. Most correct picks wins. Change a pick, or tap it again to clear it, any time before that game kicks off.";
     drawGames(); drawStandings();
 }
 
@@ -194,8 +194,10 @@ $("games").onclick = e => {
     const ev = board.events.find(x => x.id === b.dataset.event), t = [ev.away, ev.home].find(x => x.id === b.dataset.team);
     $("pool-error").textContent = "";
     try {
-        Store.setPick({ mode, profileId: $("pool-profile").value, season: board.season, week: board.week, eventId: ev.id,
-            teamId: t.id, teamAbbr: t.abbr, teamName: t.name, gameLabel: `${ev.away.abbr} @ ${ev.home.abbr}`, start: ev.start });
+        const pick = { mode, profileId: $("pool-profile").value, season: board.season, week: board.week, eventId: ev.id,
+            teamId: t.id, teamAbbr: t.abbr, teamName: t.name, gameLabel: `${ev.away.abbr} @ ${ev.home.abbr}`, start: ev.start };
+        if (b.classList.contains("on")) Store.clearPick(pick);          // tapping your pick again un-picks it
+        else Store.setPick(pick);
         render();
     } catch (err) { $("pool-error").textContent = err.message; }
 };
